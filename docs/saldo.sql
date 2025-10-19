@@ -1,6 +1,6 @@
 ﻿-- =============================================================================
 -- Diagram Name: saldo
--- Created on: 10/19/2025 7:41:58 PM
+-- Created on: 10/19/2025 9:14:48 PM
 -- Diagram Version: 
 -- =============================================================================
 
@@ -13,13 +13,17 @@ CREATE TABLE "statuses" (
 );
 
 CREATE TABLE "users" (
-	"userId" int4 NOT NULL,
+	"userId" SERIAL NOT NULL,
 	"login" varchar(64) NOT NULL,
 	"password" varchar(64) NOT NULL,
 	"authKey" varchar(32),
 	"createdAt" timestamp with time zone NOT NULL DEFAULT now(),
 	"lastActivityAt" timestamp with time zone,
 	"statusId" int4 NOT NULL,
+	"telegramId" int8 NOT NULL,
+	"telegramUsername" varchar(255) NOT NULL,
+	"teleramFirstName" varchar(255),
+	"telegramLastName" varchar(255),
 	CONSTRAINT "users_pkey" PRIMARY KEY("userId")
 );
 

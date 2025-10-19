@@ -10,17 +10,6 @@ import (
 	"github.com/vmkteam/zenrpc/v2"
 )
 
-//go:generate go tool zenrpc
-
-const (
-	AuthKey = "Authorization2"
-)
-
-const (
-	NSAuth = "auth"
-	NSUser = "user"
-)
-
 var (
 	ErrUnauthorized   = httpAsRPCError(http.StatusUnauthorized)
 	ErrForbidden      = httpAsRPCError(http.StatusForbidden)
@@ -39,14 +28,12 @@ func httpAsRPCError(code int) *zenrpc.Error {
 	return zenrpc.NewStringError(code, http.StatusText(code))
 }
 
-// New returns new zenrpc Server.
+// New returns new zenrpc Server for metrics and monitoring.
 func New(dbo db.DB, logger embedlog.Logger, isDevel bool) zenrpc.Server {
 	rpc := zenrpc.NewServer(zenrpc.Options{
 		ExposeSMD: true,
-		AllowCORS: true,
+		AllowCORS: false,
 	})
-
-	commonRepo := db.NewCommonRepo(dbo)
 
 	// middleware
 	rpc.Use(
@@ -59,14 +46,10 @@ func New(dbo db.DB, logger embedlog.Logger, isDevel bool) zenrpc.Server {
 		zm.WithSQLLogger(dbo.DB, isDevel, allowDebugFn(), allowDebugFn()),
 		zm.WithTiming(isDevel, allowDebugFn()),
 		zm.WithSentry(zm.DefaultServerName),
-		authMiddleware(&commonRepo, logger),
 	)
 
-	// services
-	rpc.RegisterAll(map[string]zenrpc.Invoker{
-		NSAuth: NewAuthService(dbo, logger),
-		NSUser: NewUserService(dbo, logger),
-	})
+	// No services registered - this RPC server is kept for metrics only
+	// Services will be added later when needed for Telegram bot
 
 	return rpc
 }
