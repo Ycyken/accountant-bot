@@ -3,9 +3,6 @@
     <PackageNames>
         <string>common</string>
     </PackageNames>
-    <TableMapping>
-        <common>users</common>
-    </TableMapping>
     <Languages>
         <string>ru</string>
     </Languages>
