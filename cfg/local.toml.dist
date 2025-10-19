@@ -1,0 +1,16 @@
+[Server]
+Host    = "localhost"
+Port    = 8075
+IsDevel = true
+
+[Database]
+Addr            = "localhost:5432"
+User            = "postgres"
+Database        = "saldo"
+Password        = ""
+PoolSize        = 5
+ApplicationName = "saldo"
+
+[Sentry]
+DSN         = ""
+Environment = ""

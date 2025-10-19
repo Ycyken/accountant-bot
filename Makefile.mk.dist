@@ -1,0 +1,14 @@
+# project service name
+NAME := saldo
+
+# local database connection settings
+TEST_PGDATABASE ?= test-saldo
+
+PGDATABASE ?= saldo
+PGHOST ?= localhost
+PGPORT ?= 5432
+PGUSER ?= postgres
+PGPASSWORD ?= postgres
+
+# add -race to GOFLAGS if RACE=1
+RACE=1

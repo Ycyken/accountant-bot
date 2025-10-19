@@ -1,0 +1,14 @@
+<Project xmlns:xsi="" xmlns:xsd="">
+    <Name>saldo.mfd</Name>
+    <PackageNames>
+        <string>common</string>
+    </PackageNames>
+    <TableMapping>
+        <common>users</common>
+    </TableMapping>
+    <Languages>
+        <string>ru</string>
+    </Languages>
+    <GoPGVer>10</GoPGVer>
+    <CustomTypes></CustomTypes>
+</Project>
