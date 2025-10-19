@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"saldo/pkg/db"
+	"saldo/pkg/saldo"
+	"saldo/pkg/telegram"
 
 	"github.com/go-pg/pg/v10"
 	monitor "github.com/hypnoglow/go-pg-monitor"
@@ -20,6 +22,10 @@ type Config struct {
 		Port    int
 		IsDevel bool
 	}
+	Telegram struct {
+		Token string
+		Debug bool
+	}
 	Sentry struct {
 		Environment string
 		DSN         string
@@ -31,22 +37,34 @@ type App struct {
 	appName string
 	cfg     Config
 	db      db.DB
-	dbc     *pg.DB
 	mon     *monitor.Monitor
 	echo    *echo.Echo
+	tgBot   *telegram.Bot
 }
 
-func New(appName string, sl embedlog.Logger, cfg Config, db db.DB, dbc *pg.DB) *App {
+func New(ctx context.Context, appName string, sl embedlog.Logger, cfg Config, dbc db.DB) (*App, error) {
 	a := &App{
 		appName: appName,
 		cfg:     cfg,
-		db:      db,
-		dbc:     dbc,
+		db:      dbc,
 		echo:    appkit.NewEcho(),
 		Logger:  sl,
 	}
 
-	return a
+	if cfg.Telegram.Token != "" {
+		saldoService := saldo.NewManager(dbc, sl)
+
+		tgBot, err := telegram.New(ctx, telegram.Config{
+			Token: cfg.Telegram.Token,
+			Debug: cfg.Telegram.Debug,
+		}, saldoService, sl)
+		if err != nil {
+			return nil, err
+		}
+		a.tgBot = tgBot
+	}
+
+	return a, nil
 }
 
 // Run is a function that runs application.
@@ -56,6 +74,15 @@ func (a *App) Run(ctx context.Context) error {
 	a.registerDebugHandlers()
 	a.registerMetadata()
 
+	// Start Telegram bot if configured
+	if a.tgBot != nil {
+		go func() {
+			if err := a.tgBot.Start(ctx); err != nil {
+				a.Error(ctx, "telegram bot error", "err", err)
+			}
+		}()
+	}
+
 	return a.runHTTPServer(ctx, a.cfg.Server.Host, a.cfg.Server.Port)
 }
 
@@ -63,6 +90,12 @@ func (a *App) Run(ctx context.Context) error {
 func (a *App) Shutdown(timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
+
+	// Stop Telegram bot
+	if a.tgBot != nil {
+		a.tgBot.Stop(ctx)
+	}
+
 	a.mon.Close()
 
 	return a.echo.Shutdown(ctx)

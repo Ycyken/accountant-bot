@@ -75,7 +75,8 @@ func main() {
 	}
 
 	// create & run app
-	a := app.New(appName, sl, cfg, dbc, pgdb)
+	a, err := app.New(ctx, appName, sl, cfg, dbc)
+	exitOnError(err)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)

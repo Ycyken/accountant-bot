@@ -11,6 +11,10 @@ Password        = ""
 PoolSize        = 5
 ApplicationName = "saldo"
 
+[Telegram]
+Token   = ""  # Get from @BotFather
+Debug   = true
+
 [Sentry]
 DSN         = ""
 Environment = ""

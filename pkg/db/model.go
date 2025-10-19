@@ -13,7 +13,7 @@ var Columns = struct {
 		ID, CreatedAt, Login, Password, AuthKey, LastActivityAt, StatusID, TelegramID, TelegramUsername, TeleramFirstName, TelegramLastName string
 	}
 	Category struct {
-		ID, UserID, Title, Alias, CreatedAt, UpdatedAt, StatusID string
+		ID, UserID, Title, Alias, CreatedAt, UpdatedAt, StatusID, Emoji string
 
 		User string
 	}
@@ -39,7 +39,7 @@ var Columns = struct {
 		TelegramLastName: "telegramLastName",
 	},
 	Category: struct {
-		ID, UserID, Title, Alias, CreatedAt, UpdatedAt, StatusID string
+		ID, UserID, Title, Alias, CreatedAt, UpdatedAt, StatusID, Emoji string
 
 		User string
 	}{
@@ -50,6 +50,7 @@ var Columns = struct {
 		CreatedAt: "createdAt",
 		UpdatedAt: "updatedAt",
 		StatusID:  "statusId",
+		Emoji:     "emoji",
 
 		User: "User",
 	},
@@ -130,6 +131,7 @@ type Category struct {
 	CreatedAt time.Time `pg:"createdAt,use_zero"`
 	UpdatedAt time.Time `pg:"updatedAt,use_zero"`
 	StatusID  int       `pg:"statusId,use_zero"`
+	Emoji     *string   `pg:"emoji"`
 
 	User *User `pg:"fk:userId,rel:has-one"`
 }

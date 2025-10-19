@@ -44,6 +44,16 @@ func (u User) Validate() (errors map[string]string, valid bool) {
 	return errors, len(errors) == 0
 }
 
+func (c Category) Validate() (errors map[string]string, valid bool) {
+	errors = map[string]string{}
+
+	if c.Emoji != nil && utf8.RuneCountInString(*c.Emoji) > 10 {
+		errors[Columns.Category.Emoji] = ErrMaxLength
+	}
+
+	return errors, len(errors) == 0
+}
+
 func (e Expense) Validate() (errors map[string]string, valid bool) {
 	errors = map[string]string{}
 

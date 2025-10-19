@@ -170,9 +170,11 @@ type CategorySearch struct {
 	CreatedAt  *time.Time
 	UpdatedAt  *time.Time
 	StatusID   *int
+	Emoji      *string
 	IDs        []int
 	NotID      *int
 	TitleILike *string
+	EmojiILike *string
 }
 
 func (cs *CategorySearch) Apply(query *orm.Query) *orm.Query {
@@ -200,6 +202,9 @@ func (cs *CategorySearch) Apply(query *orm.Query) *orm.Query {
 	if cs.StatusID != nil {
 		cs.where(query, Tables.Category.Alias, Columns.Category.StatusID, cs.StatusID)
 	}
+	if cs.Emoji != nil {
+		cs.where(query, Tables.Category.Alias, Columns.Category.Emoji, cs.Emoji)
+	}
 	if len(cs.IDs) > 0 {
 		Filter{Columns.Category.ID, cs.IDs, SearchTypeArray, false}.Apply(query)
 	}
@@ -208,6 +213,9 @@ func (cs *CategorySearch) Apply(query *orm.Query) *orm.Query {
 	}
 	if cs.TitleILike != nil {
 		Filter{Columns.Category.Title, *cs.TitleILike, SearchTypeILike, false}.Apply(query)
+	}
+	if cs.EmojiILike != nil {
+		Filter{Columns.Category.Emoji, *cs.EmojiILike, SearchTypeILike, false}.Apply(query)
 	}
 
 	cs.apply(query)

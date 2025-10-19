@@ -8,6 +8,7 @@ require (
 	github.com/go-pg/pg/v10 v10.15.0
 	github.com/go-pg/urlstruct v1.0.1
 	github.com/go-playground/validator/v10 v10.27.0
+	github.com/go-telegram/bot v1.17.0
 	github.com/hypnoglow/go-pg-monitor v1.2.0
 	github.com/hypnoglow/go-pg-monitor/gopgv10 v1.2.0
 	github.com/labstack/echo/v4 v4.13.4
@@ -16,10 +17,8 @@ require (
 	github.com/smartystreets/goconvey v1.8.1
 	github.com/vmkteam/appkit v0.0.1
 	github.com/vmkteam/embedlog v0.1.3
-	github.com/vmkteam/rpcgen/v2 v2.4.6
 	github.com/vmkteam/zenrpc-middleware v1.3.0
 	github.com/vmkteam/zenrpc/v2 v2.2.12
-	golang.org/x/crypto v0.42.0
 )
 
 require (
@@ -33,7 +32,6 @@ require (
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/gopherjs/gopherjs v1.17.2 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
-	github.com/iancoleman/orderedmap v0.3.0 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jtolds/gls v4.20.0+incompatible // indirect
 	github.com/labstack/gommon v0.4.2 // indirect
@@ -53,15 +51,13 @@ require (
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser v0.1.2 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
-	github.com/vmkteam/meta-schema/v2 v2.0.1 // indirect
-	github.com/vmkteam/zenrpc v1.1.1 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
+	golang.org/x/crypto v0.42.0 // indirect
 	golang.org/x/mod v0.27.0 // indirect
 	golang.org/x/net v0.44.0 // indirect
 	golang.org/x/sync v0.17.0 // indirect
 	golang.org/x/sys v0.36.0 // indirect
 	golang.org/x/text v0.29.0 // indirect
-	golang.org/x/time v0.11.0 // indirect
 	golang.org/x/tools v0.36.0 // indirect
 	google.golang.org/protobuf v1.36.9 // indirect
 	mellium.im/sasl v0.3.2 // indirect

@@ -1,6 +1,6 @@
 ﻿-- =============================================================================
 -- Diagram Name: saldo
--- Created on: 10/19/2025 9:14:48 PM
+-- Created on: 10/19/2025 10:47:59 PM
 -- Diagram Version: 
 -- =============================================================================
 
@@ -53,6 +53,7 @@ CREATE TABLE "categories" (
 	"createdAt" timestamp with time zone NOT NULL DEFAULT NOW(),
 	"updatedAt" timestamp with time zone NOT NULL DEFAULT NOW(),
 	"statusId" int4 NOT NULL,
+	"emoji" varchar(10),
 	PRIMARY KEY("categoryId")
 );
 
