@@ -3,8 +3,6 @@ package telegram
 import (
 	"fmt"
 
-	"saldo/pkg/db"
-
 	"github.com/go-telegram/bot/models"
 )
 
@@ -101,13 +99,13 @@ func emojiKeyboard() models.ReplyMarkup {
 }
 
 // userCategoriesKeyboard returns inline keyboard with user's categories
-func userCategoriesKeyboard(categories []db.Category) models.ReplyMarkup {
+func userCategoriesKeyboard(categories []Category) models.ReplyMarkup {
 	rows := make([][]models.InlineKeyboardButton, 0, len(categories)+1)
 
 	for _, cat := range categories {
 		emoji := ""
-		if cat.Emoji != nil {
-			emoji = *cat.Emoji + " "
+		if cat.Emoji != "" {
+			emoji = cat.Emoji + " "
 		}
 		rows = append(rows, []models.InlineKeyboardButton{
 			{

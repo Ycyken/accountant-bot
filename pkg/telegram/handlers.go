@@ -6,8 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"saldo/pkg/db"
-
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 )
@@ -204,9 +202,9 @@ func (b *Bot) handleAddExpenseStart(ctx context.Context, botAPI *bot.Bot, chatID
 }
 
 // handleExpenseTextInput handles text input for expense
-func (b *Bot) handleExpenseTextInput(ctx context.Context, botAPI *bot.Bot, chatID int64, userID int64, dbUser *db.User, text string) {
+func (b *Bot) handleExpenseTextInput(ctx context.Context, botAPI *bot.Bot, chatID int64, userID int64, user *User, text string) {
 	// Get user categories
-	categories, err := b.saldo.GetUserCategories(ctx, dbUser.ID)
+	saldoCategories, err := b.saldo.GetUserCategories(ctx, user.ID)
 	if err != nil {
 		b.logger.Error(ctx, "failed to get categories", "err", err)
 		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
@@ -215,6 +213,8 @@ func (b *Bot) handleExpenseTextInput(ctx context.Context, botAPI *bot.Bot, chatI
 		})
 		return
 	}
+
+	categories := NewCategories(saldoCategories)
 
 	// Extract category names
 	categoryNames := make([]string, len(categories))
@@ -278,7 +278,7 @@ func (b *Bot) handleExpenseTextInput(ctx context.Context, botAPI *bot.Bot, chatI
 }
 
 // handleDescriptionInput handles description input
-func (b *Bot) handleDescriptionInput(ctx context.Context, botAPI *bot.Bot, chatID int64, userID int64, dbUser *db.User, description string) {
+func (b *Bot) handleDescriptionInput(ctx context.Context, botAPI *bot.Bot, chatID int64, userID int64, user *User, description string) {
 	stateData := b.stateManager.GetState(userID)
 
 	if stateData.ExpenseData == nil {
@@ -295,12 +295,13 @@ func (b *Bot) handleDescriptionInput(ctx context.Context, botAPI *bot.Bot, chatI
 	// Check if category is still needed
 	if stateData.ExpenseData.Category == "" {
 		// Get user categories
-		categories, err := b.saldo.GetUserCategories(ctx, dbUser.ID)
+		saldoCategories, err := b.saldo.GetUserCategories(ctx, user.ID)
 		if err != nil {
 			b.logger.Error(ctx, "failed to get categories", "err", err)
 			return
 		}
 
+		categories := NewCategories(saldoCategories)
 		stateData.State = StateAwaitingExpenseCategory
 		b.stateManager.SetStateData(userID, stateData)
 
@@ -313,7 +314,7 @@ func (b *Bot) handleDescriptionInput(ctx context.Context, botAPI *bot.Bot, chatI
 	}
 
 	// Create expense
-	b.createExpense(ctx, botAPI, chatID, userID, dbUser, stateData.ExpenseData)
+	b.createExpense(ctx, botAPI, chatID, userID, user, stateData.ExpenseData)
 }
 
 // showExpenseConfirmation shows expense details for confirmation
@@ -339,17 +340,16 @@ func (b *Bot) showExpenseConfirmation(ctx context.Context, botAPI *bot.Bot, chat
 }
 
 // createExpense creates expense in database
-func (b *Bot) createExpense(ctx context.Context, botAPI *bot.Bot, chatID int64, userID int64, dbUser *db.User, expenseData *ExpenseData) {
+func (b *Bot) createExpense(ctx context.Context, botAPI *bot.Bot, chatID int64, userID int64, user *User, expenseData *ExpenseData) {
 	// Create expense with category
 	_, err := b.saldo.CreateExpenseWithCategory(
 		ctx,
-		dbUser.ID,
+		user.ID,
 		expenseData.Amount,
 		expenseData.Currency,
 		expenseData.Category,
 		expenseData.Description,
 	)
-
 	if err != nil {
 		b.logger.Error(ctx, "failed to create expense", "err", err)
 		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
@@ -374,7 +374,7 @@ func (b *Bot) createExpense(ctx context.Context, botAPI *bot.Bot, chatID int64, 
 }
 
 // handleVoice handles voice messages
-func (b *Bot) handleVoice(ctx context.Context, botAPI *bot.Bot, update *models.Update, dbUser *db.User) {
+func (b *Bot) handleVoice(ctx context.Context, botAPI *bot.Bot, update *models.Update, user *User) {
 	if update.Message == nil || update.Message.From == nil || update.Message.Voice == nil {
 		return
 	}
@@ -409,7 +409,7 @@ func (b *Bot) handleVoice(ctx context.Context, botAPI *bot.Bot, update *models.U
 	}
 
 	// Process transcription as text
-	b.handleExpenseTextInput(ctx, botAPI, chatID, userID, dbUser, transcription)
+	b.handleExpenseTextInput(ctx, botAPI, chatID, userID, user, transcription)
 }
 
 // handleStatistics handles statistics request
@@ -443,8 +443,8 @@ func (b *Bot) handleCallback(ctx context.Context, botAPI *bot.Bot, update *model
 	b.logger.Print(ctx, "callback received", "data", data, "from", callback.From.Username)
 
 	// Get user from DB
-	dbUser, err := b.getUserByTelegramID(ctx, userID)
-	if err != nil || dbUser == nil {
+	user, err := b.getUserByTelegramID(ctx, userID)
+	if err != nil || user == nil {
 		_, _ = botAPI.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
 			CallbackQueryID: callback.ID,
 			Text:            "Ошибка: пользователь не найден",
@@ -464,11 +464,11 @@ func (b *Bot) handleCallback(ctx context.Context, botAPI *bot.Bot, update *model
 
 	switch action {
 	case "emoji":
-		b.handleEmojiSelection(ctx, botAPI, callback, chatID, userID, dbUser, value)
+		b.handleEmojiSelection(ctx, botAPI, callback, chatID, userID, user, value)
 	case "select_cat":
-		b.handleCategorySelection(ctx, botAPI, callback, chatID, userID, dbUser, value)
+		b.handleCategorySelection(ctx, botAPI, callback, chatID, userID, user, value)
 	case "expense":
-		b.handleExpenseAction(ctx, botAPI, callback, chatID, userID, dbUser, value)
+		b.handleExpenseAction(ctx, botAPI, callback, chatID, userID, user, value)
 	default:
 		_, _ = botAPI.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
 			CallbackQueryID: callback.ID,
@@ -478,7 +478,7 @@ func (b *Bot) handleCallback(ctx context.Context, botAPI *bot.Bot, update *model
 }
 
 // handleEmojiSelection handles emoji selection for category
-func (b *Bot) handleEmojiSelection(ctx context.Context, botAPI *bot.Bot, callback *models.CallbackQuery, chatID int64, userID int64, dbUser *db.User, emoji string) {
+func (b *Bot) handleEmojiSelection(ctx context.Context, botAPI *bot.Bot, callback *models.CallbackQuery, chatID int64, userID int64, user *User, emoji string) {
 	if emoji == "cancel" {
 		b.stateManager.ClearState(userID)
 		_, _ = botAPI.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
@@ -503,7 +503,7 @@ func (b *Bot) handleEmojiSelection(ctx context.Context, botAPI *bot.Bot, callbac
 	}
 
 	// Create category
-	_, err := b.saldo.CreateCategory(ctx, dbUser.ID, stateData.CategoryName, &emoji)
+	_, err := b.saldo.CreateCategory(ctx, user.ID, stateData.CategoryName, &emoji)
 	if err != nil {
 		b.logger.Error(ctx, "failed to create category", "err", err)
 		_, _ = botAPI.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
@@ -533,7 +533,7 @@ func (b *Bot) handleEmojiSelection(ctx context.Context, botAPI *bot.Bot, callbac
 }
 
 // handleCategorySelection handles category selection for expense
-func (b *Bot) handleCategorySelection(ctx context.Context, botAPI *bot.Bot, callback *models.CallbackQuery, chatID int64, userID int64, dbUser *db.User, value string) {
+func (b *Bot) handleCategorySelection(ctx context.Context, botAPI *bot.Bot, callback *models.CallbackQuery, chatID int64, userID int64, user *User, value string) {
 	if value == "new" {
 		// Start new category flow
 		_, _ = botAPI.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
@@ -555,8 +555,8 @@ func (b *Bot) handleCategorySelection(ctx context.Context, botAPI *bot.Bot, call
 	}
 
 	// Get category
-	category, err := b.saldo.GetCategoryByID(ctx, categoryID)
-	if err != nil || category == nil {
+	saldoCategory, err := b.saldo.GetCategoryByID(ctx, categoryID)
+	if err != nil || saldoCategory == nil {
 		_, _ = botAPI.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
 			CallbackQueryID: callback.ID,
 			Text:            "Ошибка: категория не найдена",
@@ -576,10 +576,11 @@ func (b *Bot) handleCategorySelection(ctx context.Context, botAPI *bot.Bot, call
 	}
 
 	// Update expense data with category
+	category := NewCategory(saldoCategory)
 	stateData.ExpenseData.Category = category.Title
 
 	// Create expense
-	b.createExpense(ctx, botAPI, chatID, userID, dbUser, stateData.ExpenseData)
+	b.createExpense(ctx, botAPI, chatID, userID, user, stateData.ExpenseData)
 
 	_, _ = botAPI.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
 		CallbackQueryID: callback.ID,
@@ -587,7 +588,7 @@ func (b *Bot) handleCategorySelection(ctx context.Context, botAPI *bot.Bot, call
 }
 
 // handleExpenseAction handles expense confirmation/cancellation
-func (b *Bot) handleExpenseAction(ctx context.Context, botAPI *bot.Bot, callback *models.CallbackQuery, chatID int64, userID int64, dbUser *db.User, action string) {
+func (b *Bot) handleExpenseAction(ctx context.Context, botAPI *bot.Bot, callback *models.CallbackQuery, chatID int64, userID int64, user *User, action string) {
 	if action == "cancel" {
 		b.stateManager.ClearState(userID)
 		_, _ = botAPI.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
@@ -612,7 +613,7 @@ func (b *Bot) handleExpenseAction(ctx context.Context, botAPI *bot.Bot, callback
 			return
 		}
 
-		b.createExpense(ctx, botAPI, chatID, userID, dbUser, stateData.ExpenseData)
+		b.createExpense(ctx, botAPI, chatID, userID, user, stateData.ExpenseData)
 
 		_, _ = botAPI.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
 			CallbackQueryID: callback.ID,
