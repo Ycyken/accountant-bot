@@ -2,6 +2,8 @@
 .vscode
 cfg/local.toml
 cfg/config.toml
+.env
+gomplate
 saldo
 coverage.txt
 coverage.xml

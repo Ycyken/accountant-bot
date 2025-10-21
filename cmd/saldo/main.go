@@ -26,7 +26,7 @@ const appName = "saldo"
 
 var (
 	fs           = flag.NewFlagSetWithEnvPrefix(os.Args[0], strings.ToUpper(appName), 0)
-	flConfigPath = fs.String("config", "config.toml", "Path to config file")
+	flConfigPath = fs.String("config", "cfg/config.toml", "Path to config file")
 	flVerbose    = fs.Bool("verbose", false, "enable debug output")
 	flJSONLogs   = fs.Bool("json", false, "enable json output")
 	flDev        = fs.Bool("dev", false, "enable dev mode")
