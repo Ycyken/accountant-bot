@@ -1,6 +1,8 @@
 .idea
 .vscode
 cfg/local.toml
+cfg/config.toml
+saldo
 coverage.txt
 coverage.xml
 Makefile.mk
