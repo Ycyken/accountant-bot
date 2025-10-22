@@ -4,7 +4,7 @@ cfg/local.toml
 cfg/config.toml
 deployments/.env
 models/
-saldo
+/saldo
 coverage.txt
 coverage.xml
 Makefile.mk
