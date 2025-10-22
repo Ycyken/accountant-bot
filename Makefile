@@ -77,8 +77,8 @@ mod:
 db:
 	@dropdb --if-exists -f $(PGDATABASE)
 	@createdb $(PGDATABASE)
-	@psql -f docs/$(NAME).sql $(PGDATABASE)
-	@psql -f docs/init.sql $(PGDATABASE)
+	@psql -f docs/001_$(NAME).sql $(PGDATABASE)
+	@psql -f docs/002_init.sql $(PGDATABASE)
 
 db-test:
 	@$(MAKE) --no-print-directory db PGDATABASE=${TEST_PGDATABASE}
