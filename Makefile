@@ -23,6 +23,7 @@ export PGPASSWORD
 init:
 	@cp -n Makefile.mk.dist Makefile.mk
 	@cp -n cfg/local.toml.dist cfg/local.toml
+	@cp -n cfg/local.toml.dist cfg/config.toml
 
 show-env:
 	@echo "NAME=$(NAME)"
