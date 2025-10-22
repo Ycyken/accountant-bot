@@ -28,7 +28,7 @@ services:
     env_file:
       - .env
     volumes:
-      - ../docs:/docker-entrypoint-initdb.d
+      - ../docs:/docs
       - pgdata:/var/lib/postgresql/data/
 
 volumes:

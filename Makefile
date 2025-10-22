@@ -78,8 +78,15 @@ mod:
 db:
 	@dropdb --if-exists -f $(PGDATABASE)
 	@createdb $(PGDATABASE)
-	@psql -f docs/001_$(NAME).sql $(PGDATABASE)
-	@psql -f docs/002_init.sql $(PGDATABASE)
+	@psql -f docs/$(NAME).sql $(PGDATABASE)
+	@psql -f docs/init.sql $(PGDATABASE)
+
+EXEC = docker exec postgres
+docker-db:
+	@$(EXEC) dropdb -U $(PGUSER) --if-exists -f $(PGDATABASE)
+	@$(EXEC) createdb -U $(PGUSER) $(PGDATABASE)
+	@$(EXEC) psql -U $(PGUSER) -f /docs/$(NAME).sql $(PGDATABASE)
+	@$(EXEC) psql -U $(PGUSER) -f /docs/init.sql $(PGDATABASE)
 
 db-test:
 	@$(MAKE) --no-print-directory db PGDATABASE=${TEST_PGDATABASE}

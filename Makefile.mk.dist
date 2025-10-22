@@ -5,10 +5,10 @@ NAME := saldo
 TEST_PGDATABASE ?= test-saldo
 
 PGDATABASE ?= saldo
-PGHOST ?= localhost
+PGHOST ?= postgres
 PGPORT ?= 5432
-PGUSER ?= postgres
-PGPASSWORD ?= postgres
+PGUSER ?= user
+PGPASSWORD ?= password
 
 # add -race to GOFLAGS if RACE=1
 RACE=1

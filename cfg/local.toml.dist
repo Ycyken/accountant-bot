@@ -5,9 +5,9 @@ IsDevel = true
 
 [Database]
 Addr            = "postgres:5432"
-User            = "saldo"
+User            = "user"
 Database        = "saldo"
-Password        = "123"
+Password        = "password"
 PoolSize        = 5
 ApplicationName = "saldo"
 
