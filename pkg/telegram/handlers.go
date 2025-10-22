@@ -389,7 +389,11 @@ func (b *Bot) downloadTgFile(ctx context.Context, botAPI *bot.Bot, fileID string
 
 	fileURL := fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", botAPI.Token(), file.FilePath)
 	b.logger.Print(ctx, "file url", "url", fileURL)
-	resp, err := http.Get(fileURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fileURL, nil)
+	if err != nil {
+		return "", err
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		b.logger.Error(ctx, "failed to download file from telegram", "err", err)
 		return "", err
