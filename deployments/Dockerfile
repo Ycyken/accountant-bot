@@ -9,10 +9,10 @@ RUN apt update && apt install -y build-essential cmake git wget \
 FROM golang:1.24-bookworm AS builder
 WORKDIR /app
 
-COPY go.mod go.sum ./
+COPY ../go.mod go.sum ./
 RUN go mod download
 
-COPY . .
+COPY .. .
 RUN make init
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \

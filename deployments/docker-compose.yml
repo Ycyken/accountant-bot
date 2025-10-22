@@ -3,11 +3,11 @@ version: "3.9"
 services:
   bot:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: deployments/Dockerfile
     container_name: saldo-bot
     volumes:
-      - ./models/:/app/models/
+      - ../models/:/app/models/
     depends_on:
       postgres:
         condition: service_healthy
