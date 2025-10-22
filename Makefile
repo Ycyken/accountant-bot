@@ -49,7 +49,10 @@ lint:
 	@golangci-lint run
 
 build:
-	@CGO_ENABLED=0 go build $(GOFLAGS) -o ${NAME} $(MAIN)
+	@CGO_ENABLED=1 go build $(GOFLAGS) -o ${NAME} $(MAIN)
+
+build-prod:
+	@CGO_ENABLED=0 go build -mod=vendor -o ${NAME} $(MAIN)
 
 run:
 	@echo "Compiling"

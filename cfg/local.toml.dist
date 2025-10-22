@@ -4,10 +4,10 @@ Port    = 8075
 IsDevel = true
 
 [Database]
-Addr            = "localhost:5432"
-User            = "postgres"
+Addr            = "postgres:5432"
+User            = "saldo"
 Database        = "saldo"
-Password        = ""
+Password        = "123"
 PoolSize        = 5
 ApplicationName = "saldo"
 

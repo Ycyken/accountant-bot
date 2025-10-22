@@ -9,21 +9,20 @@ RUN apt update && apt install -y build-essential cmake git wget \
 FROM golang:1.24-bookworm AS builder
 WORKDIR /app
 
-COPY ../go.mod go.sum ./
-RUN go mod download
+COPY ../go.mod go.sum vendor ./
 
 COPY .. .
-RUN make init
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
-    make build
+    make init && make build-prod
 
 FROM debian:bookworm-slim
 WORKDIR /app
 RUN apt update && apt install -y ca-certificates ffmpeg
+COPY ../cfg/config.toml /app/cfg/config.toml
 COPY --from=builder /app/saldo .
 COPY --from=builder /app/cfg/config.toml /app/cfg/config.toml
 COPY --from=whisper /usr/local/bin/whisper-cli /usr/local/bin/whisper-cli
 
-CMD ["./saldo"]
+CMD ["./saldo", "-config=cfg/config.toml"]
 
