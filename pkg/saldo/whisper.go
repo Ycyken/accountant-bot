@@ -5,12 +5,24 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 )
 
 type Whisper struct{}
 
+func NewWhisper() *Whisper {
+	return &Whisper{}
+}
+
 func (w *Whisper) Transcribe(ctx context.Context, audioFilePath string) (string, error) {
-	tmpWav := "tmp.wav"
+	fileBase := filepath.Base(audioFilePath)
+	fileExt := filepath.Ext(fileBase)
+	fileName := fileBase[:len(fileBase)-len(fileExt)]
+	tmpWav := fmt.Sprintf("/tmp/whisper/%s.wav", fileName)
+	err := os.MkdirAll(filepath.Dir(tmpWav), 0755)
+	if err != nil {
+		return "", err
+	}
 	defer os.Remove(tmpWav)
 
 	cmd := exec.CommandContext(ctx, "ffmpeg",
@@ -27,6 +39,8 @@ func (w *Whisper) Transcribe(ctx context.Context, audioFilePath string) (string,
 
 	cmd = exec.CommandContext(ctx,
 		"whisper-cli",
+		"-m", "models/ggml-base.bin",
+		"-l", "ru",
 		"-f", tmpWav,
 		"-otxt",
 		"-of", "-",

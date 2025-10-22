@@ -52,7 +52,7 @@ func New(ctx context.Context, cfg Config, saldoService *saldo.Manager, logger em
 		saldo:        saldoService,
 		debug:        cfg.Debug,
 		stateManager: NewStateManager(),
-		whisper:      NewMockWhisperService(logger),
+		whisper:      saldo.NewWhisper(),
 		llm:          NewMockLLMService(logger),
 	}
 

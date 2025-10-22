@@ -3,6 +3,10 @@ package telegram
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -373,6 +377,43 @@ func (b *Bot) createExpense(ctx context.Context, botAPI *bot.Bot, chatID int64, 
 	})
 }
 
+// Download Telegram file by file ID
+func (b *Bot) downloadTgFile(ctx context.Context, botAPI *bot.Bot, fileID string) (string, error) {
+	file, err := botAPI.GetFile(ctx, &bot.GetFileParams{
+		FileID: fileID,
+	})
+	if err != nil {
+		b.logger.Error(ctx, "failed to get file", "err", err)
+		return "", err
+	}
+
+	fileURL := fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", botAPI.Token(), file.FilePath)
+	b.logger.Print(ctx, "file url", "url", fileURL)
+	resp, err := http.Get(fileURL)
+	if err != nil {
+		b.logger.Error(ctx, "failed to download file from telegram", "err", err)
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	tmpOgg := fmt.Sprintf("/tmp/whisper/%s.ogg", fileID)
+	err = os.MkdirAll(filepath.Dir(tmpOgg), 0755)
+	if err != nil {
+		return "", err
+	}
+	ogg, err := os.Create(tmpOgg)
+	if err != nil {
+		return "", err
+	}
+	_, err = io.Copy(ogg, resp.Body)
+	if err != nil {
+		b.logger.Error(ctx, "failed to save downloaded file", "err", err)
+		return "", err
+	}
+	ogg.Close()
+	return tmpOgg, nil
+}
+
 // handleVoice handles voice messages
 func (b *Bot) handleVoice(ctx context.Context, botAPI *bot.Bot, update *models.Update, user *User) {
 	if update.Message == nil || update.Message.From == nil || update.Message.Voice == nil {
@@ -392,13 +433,22 @@ func (b *Bot) handleVoice(ctx context.Context, botAPI *bot.Bot, update *models.U
 		return
 	}
 
-	// Download voice file
-	// In real implementation, we would download the file and pass it to whisper
 	voiceFileID := update.Message.Voice.FileID
 	b.logger.Print(ctx, "received voice message", "file_id", voiceFileID)
+	tmpOgg, err := b.downloadTgFile(ctx, botAPI, voiceFileID)
+	defer os.Remove(tmpOgg)
+	if err != nil {
+		b.logger.Error(ctx, "failed to download voice file", "err", err)
+		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID: chatID,
+			Text:   "Ошибка получения голосового сообщения.",
+		})
+		return
+	}
 
 	// Mock transcription
-	transcription, err := b.whisper.Transcribe(ctx, voiceFileID)
+	transcription, err := b.whisper.Transcribe(ctx, tmpOgg)
+	b.logger.Print(ctx, "transcription result", "text", transcription)
 	if err != nil {
 		b.logger.Error(ctx, "failed to transcribe voice", "err", err)
 		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{

@@ -59,6 +59,10 @@ run:
 	@echo "Compiling"
 	@go run $(GOFLAGS) $(MAIN) -config=cfg/local.toml -dev
 
+models:
+	@mkdir -p ./models
+	@wget -nc https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin -O ./models/ggml-base.bin || true
+
 generate:
 	#@go generate ./pkg/rpc
 	@go generate ./pkg/vt
@@ -114,7 +118,7 @@ mfd-vt-template: --check-ns type-script-client
 type-script-client: generate
 	@go run $(GOFLAGS) $(MAIN) -config=cfg/local.toml -ts_client > ../gold-vt/src/services/api/factory.ts
 
-deploy:
+deploy: models
 	sh deployments/env_from_toml.sh
 	docker compose -f deployments/docker-compose.yml up -d --build
 

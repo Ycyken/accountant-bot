@@ -1,8 +1,8 @@
 FROM debian:bookworm-slim AS whisper
 RUN apt update && apt install -y build-essential cmake git wget \
   && git clone --depth=1 https://github.com/ggml-org/whisper.cpp.git /opt/whisper \
-  && cd /opt/whisper &&  sh ./models/download-ggml-model.sh tiny \
-  && cmake -B build && cmake --build build -j --config Release \
+  && cd /opt/whisper \
+  && cmake -B build -DBUILD_SHARED_LIBS=OFF && cmake --build build -j --config Release \
   && cp build/bin/whisper-cli /usr/local/bin/ \
   && rm -rf /var/lib/apt/lists/* /opt/whisper
 
