@@ -1,4 +1,4 @@
-package telegram
+package services
 
 import (
 	"context"
@@ -10,42 +10,9 @@ import (
 	"github.com/vmkteam/embedlog"
 )
 
-// WhisperService handles voice transcription
-type WhisperService interface {
-	Transcribe(ctx context.Context, audioFilePath string) (string, error)
-}
-
-// LLMService handles expense parsing from text
-type LLMService interface {
+// LLM handles expense parsing from text
+type LLM interface {
 	ParseExpense(ctx context.Context, text string, userCategories []string) (*ParsedExpense, error)
-}
-
-// ParsedExpense represents parsed expense data from LLM
-type ParsedExpense struct {
-	Amount           float64
-	Currency         string
-	Category         string
-	Description      string
-	NeedsCategory    bool
-	NeedsDescription bool
-}
-
-// MockWhisperService is a mock implementation of WhisperService
-type MockWhisperService struct {
-	logger embedlog.Logger
-}
-
-// NewMockWhisperService creates a new mock whisper service
-func NewMockWhisperService(logger embedlog.Logger) *MockWhisperService {
-	return &MockWhisperService{logger: logger}
-}
-
-// Transcribe mocks transcription of audio file
-func (m *MockWhisperService) Transcribe(ctx context.Context, audioFilePath string) (string, error) {
-	m.logger.Print(ctx, "mock whisper transcribe", "file", audioFilePath)
-
-	// Mock response - in real implementation this would call whisper.cpp
-	return "купил еды на 500 рублей в категории еда", nil
 }
 
 // MockLLMService is a mock implementation of LLMService

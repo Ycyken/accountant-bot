@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 
+	"saldo/pkg/services"
+
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 )
@@ -322,7 +324,7 @@ func (b *Bot) handleDescriptionInput(ctx context.Context, botAPI *bot.Bot, chatI
 }
 
 // showExpenseConfirmation shows expense details for confirmation
-func (b *Bot) showExpenseConfirmation(ctx context.Context, botAPI *bot.Bot, chatID int64, userID int64, parsed *ParsedExpense) {
+func (b *Bot) showExpenseConfirmation(ctx context.Context, botAPI *bot.Bot, chatID int64, userID int64, parsed *services.ParsedExpense) {
 	// Save to state for confirmation
 	stateData := b.stateManager.GetState(userID)
 	stateData.ExpenseData = &ExpenseData{
@@ -333,7 +335,7 @@ func (b *Bot) showExpenseConfirmation(ctx context.Context, botAPI *bot.Bot, chat
 	}
 	b.stateManager.SetStateData(userID, stateData)
 
-	text := "✅ <b>Подтвердите расход:</b>\n\n" + FormatExpenseDetails(parsed)
+	text := "✅ <b>Подтвердите расход:</b>\n\n" + services.FormatExpenseDetails(parsed)
 
 	_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
 		ChatID:      chatID,

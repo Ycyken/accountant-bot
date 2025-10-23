@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"saldo/pkg/saldo"
+	"saldo/pkg/services"
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
@@ -18,13 +19,14 @@ type Bot struct {
 	saldo        *saldo.Manager
 	debug        bool
 	stateManager *StateManager
-	whisper      WhisperService
-	llm          LLMService
+	whisper      services.Transcriber
+	llm          services.LLM
 }
 
 type Config struct {
-	Token string
-	Debug bool
+	Token     string
+	Debug     bool
+	GroqToken string
 }
 
 // New creates a new Telegram bot instance
@@ -53,7 +55,7 @@ func New(ctx context.Context, cfg Config, saldoService *saldo.Manager, logger em
 		debug:        cfg.Debug,
 		stateManager: NewStateManager(),
 		whisper:      saldo.NewWhisper(),
-		llm:          NewMockLLMService(logger),
+		llm:          saldo.NewGroq(cfg.GroqToken),
 	}
 
 	// Register command handlers

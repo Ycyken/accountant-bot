@@ -30,6 +30,9 @@ type Config struct {
 		Environment string
 		DSN         string
 	}
+	Groq struct {
+		Token string
+	}
 }
 
 type App struct {
@@ -55,8 +58,9 @@ func New(ctx context.Context, appName string, sl embedlog.Logger, cfg Config, db
 		saldoService := saldo.NewManager(dbc, sl)
 
 		tgBot, err := telegram.New(ctx, telegram.Config{
-			Token: cfg.Telegram.Token,
-			Debug: cfg.Telegram.Debug,
+			Token:     cfg.Telegram.Token,
+			Debug:     cfg.Telegram.Debug,
+			GroqToken: cfg.Groq.Token,
 		}, saldoService, sl)
 		if err != nil {
 			return nil, err
