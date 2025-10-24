@@ -205,7 +205,7 @@ func (b *Bot) handleExpenseTextInput(ctx context.Context, botAPI *bot.Bot, chatI
 		return
 	}
 
-	if expenses == nil || len(expenses) == 0 {
+	if len(expenses) == 0 {
 		b.logger.Print(ctx, "пользователь ввёл сообщение без расходов", "err", err)
 		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID: chatID,
@@ -339,7 +339,6 @@ func (b *Bot) handleVoice(ctx context.Context, botAPI *bot.Bot, update *models.U
 	voiceFileID := update.Message.Voice.FileID
 	b.logger.Print(ctx, "received voice message", "file_id", voiceFileID)
 	tmpOgg, err := b.downloadTgFile(ctx, botAPI, voiceFileID)
-	defer os.Remove(tmpOgg)
 	if err != nil {
 		b.logger.Error(ctx, "failed to download voice file", "err", err)
 		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
@@ -348,9 +347,10 @@ func (b *Bot) handleVoice(ctx context.Context, botAPI *bot.Bot, update *models.U
 		})
 		return
 	}
+	defer os.Remove(tmpOgg)
 
 	// Mock transcription
-	transcription, err := b.whisper.Transcribe(ctx, tmpOgg)
+	transcription, err := b.transcriber.Transcribe(ctx, tmpOgg)
 	b.logger.Print(ctx, "transcription result", "text", transcription)
 	if err != nil {
 		b.logger.Error(ctx, "failed to transcribe voice", "err", err)

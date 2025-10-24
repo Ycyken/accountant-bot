@@ -25,7 +25,7 @@ func NewMockLLMService(logger embedlog.Logger) *MockLLMService {
 	return &MockLLMService{logger: logger}
 }
 
-// ParseExpense mocks parsing of expense text using LLM
+// ParseExpenses mocks parsing of expense text using LLM
 func (m *MockLLMService) ParseExpenses(ctx context.Context, text string, userCategories []string) (*ParsedExpense, error) {
 	m.logger.Print(ctx, "mock llm parse expense", "text", text, "categories", userCategories)
 

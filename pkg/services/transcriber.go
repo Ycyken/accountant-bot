@@ -8,7 +8,7 @@ import (
 
 // Transcriber handles voice transcription
 type Transcriber interface {
-	Transcribe(ctx context.Context, audioFilePath string) (string, error)
+	Transcribe(ctx context.Context, oggFilePath string) (string, error)
 }
 
 // ParsedExpense represents parsed expense data from LLM
@@ -30,8 +30,8 @@ func NewMockTranscriber(logger embedlog.Logger) *MockTranscriber {
 }
 
 // Transcribe mocks transcription of audio file
-func (m *MockTranscriber) Transcribe(ctx context.Context, audioFilePath string) (string, error) {
-	m.logger.Print(ctx, "mock transcriber", "file", audioFilePath)
+func (m *MockTranscriber) Transcribe(ctx context.Context, oggFilePath string) (string, error) {
+	m.logger.Print(ctx, "mock transcriber", "file", oggFilePath)
 
 	// Mock response - in real implementation this would call whisper.cpp
 	return "купил еды на 500 рублей в категории еда", nil

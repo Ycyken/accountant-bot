@@ -7,13 +7,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"saldo/pkg/services"
 )
-
-const model = "llama-3.1-8b-instant"
 
 const systemPrompt = `Ты — парсер расходов. Извлеки информацию о расходах из текста и верни ТОЛЬКО валидный JSON массив.
 В каждом запросе пользователь будет присылать список доступных категорий и текст расхода.
@@ -67,6 +68,9 @@ const systemPrompt = `Ты — парсер расходов. Извлеки и�
 Ввод: "Сегодня гулял в парке"
 Вывод: []`
 
+const generalModel = "llama-3.1-8b-instant"
+const sttModel = "whisper-large-v3-turbo"
+
 type Groq struct {
 	token string
 }
@@ -77,7 +81,7 @@ func NewGroq(token string) *Groq {
 	}
 }
 
-type groqRequest struct {
+type groqChatRequest struct {
 	Model       string  `json:"model"`
 	Temperature float64 `json:"temperature"`
 	Messages    []struct {
@@ -102,9 +106,10 @@ const (
 	AssistantRole GroqRole = "assistant"
 )
 
-func (g *Groq) callGroq(ctx context.Context, userPrompt string) (string, error) {
-	reqBody := groqRequest{
-		Model: model,
+func (g *Groq) callChat(ctx context.Context, userPrompt string) (string, error) {
+	const endpoint = "https://api.groq.com/openai/v1/chat/completions"
+	reqBody := groqChatRequest{
+		Model: generalModel,
 		Messages: []struct {
 			Role    string `json:"role"`
 			Content string `json:"content"`
@@ -117,7 +122,7 @@ func (g *Groq) callGroq(ctx context.Context, userPrompt string) (string, error) 
 	jsonData, _ := json.Marshal(reqBody)
 
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost,
-		"https://api.groq.com/openai/v1/chat/completions",
+		endpoint,
 		bytes.NewBuffer(jsonData))
 
 	req.Header.Set("Content-Type", "application/json")
@@ -154,9 +159,9 @@ func buildExpensePrompt(text string, userCategories []string) string {
 }
 
 func (g *Groq) ParseExpenses(ctx context.Context, text string, userCategories []string) ([]services.ParsedExpense, error) {
-	prompt := buildExpensePrompt(text, userCategories)
+	userPrompt := buildExpensePrompt(text, userCategories)
 
-	response, err := g.callGroq(ctx, prompt)
+	response, err := g.callChat(ctx, userPrompt)
 	if err != nil {
 		return nil, fmt.Errorf("groq api call failed: %w", err)
 	}
@@ -167,4 +172,87 @@ func (g *Groq) ParseExpenses(ctx context.Context, text string, userCategories []
 	}
 
 	return expenses, nil
+}
+
+func NewAudioRequest(filePath string, fields map[string]string) (*bytes.Buffer, string, error) {
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	f, err := os.Open(filePath)
+	if err != nil {
+		return nil, "", err
+	}
+	defer f.Close()
+
+	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
+	if err != nil {
+		return nil, "", err
+	}
+	_, err = io.Copy(part, f)
+	if err != nil {
+		return nil, "", err
+	}
+
+	for k, v := range fields {
+		err = writer.WriteField(k, v)
+		if err != nil {
+			return nil, "", err
+		}
+	}
+	writer.Close()
+	return body, writer.FormDataContentType(), nil
+}
+
+func (g *Groq) callTranscription(ctx context.Context, audioFilePath string) (string, error) {
+	const endpoint = "https://api.groq.com/openai/v1/audio/transcriptions"
+
+	fields := map[string]string{
+		"model":       sttModel,
+		"language":    "ru",
+		"temperature": "0",
+	}
+	body, contentType, err := NewAudioRequest(audioFilePath, fields)
+	if err != nil {
+		return "", fmt.Errorf("build request body: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, body)
+	if err != nil {
+		return "", fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+g.token)
+	req.Header.Set("Content-Type", contentType)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("do request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("api error: %s", string(respBody))
+	}
+
+	var text struct {
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal(respBody, &text); err != nil {
+		return "", fmt.Errorf("parse response: %w", err)
+	}
+	return text.Text, nil
+}
+
+func (g *Groq) Transcribe(ctx context.Context, oggFilePath string) (string, error) {
+	tmpWav, err := ConvertOggToWav(ctx, oggFilePath)
+	if err != nil {
+		return "", fmt.Errorf("convert ogg to wav: %w", err)
+	}
+	defer os.Remove(tmpWav)
+
+	text, err := g.callTranscription(ctx, tmpWav)
+	if err != nil {
+		return "", fmt.Errorf("transcription failed: %w", err)
+	}
+
+	return text, nil
 }

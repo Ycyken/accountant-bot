@@ -19,7 +19,7 @@ type Bot struct {
 	saldo        *saldo.Manager
 	debug        bool
 	stateManager *StateManager
-	whisper      services.Transcriber
+	transcriber  services.Transcriber
 	llm          services.LLM
 }
 
@@ -54,7 +54,7 @@ func New(ctx context.Context, cfg Config, saldoService *saldo.Manager, logger em
 		saldo:        saldoService,
 		debug:        cfg.Debug,
 		stateManager: NewStateManager(),
-		whisper:      saldo.NewWhisper(),
+		transcriber:  saldo.NewLocalWhisper(),
 		llm:          saldo.NewGroq(cfg.GroqToken),
 	}
 
