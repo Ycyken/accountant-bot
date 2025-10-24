@@ -12,7 +12,7 @@ import (
 
 // LLM handles expense parsing from text
 type LLM interface {
-	ParseExpense(ctx context.Context, text string, userCategories []string) ([]ParsedExpense, error)
+	ParseExpenses(ctx context.Context, text string, userCategories []string) ([]ParsedExpense, error)
 }
 
 // MockLLMService is a mock implementation of LLMService
@@ -26,7 +26,7 @@ func NewMockLLMService(logger embedlog.Logger) *MockLLMService {
 }
 
 // ParseExpense mocks parsing of expense text using LLM
-func (m *MockLLMService) ParseExpense(ctx context.Context, text string, userCategories []string) (*ParsedExpense, error) {
+func (m *MockLLMService) ParseExpenses(ctx context.Context, text string, userCategories []string) (*ParsedExpense, error) {
 	m.logger.Print(ctx, "mock llm parse expense", "text", text, "categories", userCategories)
 
 	// Simple pattern matching (mock LLM behavior)

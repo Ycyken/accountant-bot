@@ -195,12 +195,21 @@ func (b *Bot) handleExpenseTextInput(ctx context.Context, botAPI *bot.Bot, chatI
 	}
 
 	// Parse expense using LLM
-	expenses, err := b.llm.ParseExpense(ctx, text, categoryNames)
+	expenses, err := b.llm.ParseExpenses(ctx, text, categoryNames)
 	if err != nil {
 		b.logger.Error(ctx, "failed to parse expense", "err", err)
 		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID: chatID,
 			Text:   "Ошибка обработки текста.",
+		})
+		return
+	}
+
+	if expenses == nil || len(expenses) == 0 {
+		b.logger.Print(ctx, "пользователь ввёл сообщение без расходов", "err", err)
+		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID: chatID,
+			Text:   "Не получилось получить расходы.",
 		})
 		return
 	}
