@@ -13,12 +13,10 @@ type Transcriber interface {
 
 // ParsedExpense represents parsed expense data from LLM
 type ParsedExpense struct {
-	Amount           float64
-	Currency         string
-	Category         string
-	Description      string
-	NeedsCategory    bool
-	NeedsDescription bool
+	Amount      float64 `json:"amount"`
+	Currency    string  `json:"currency"`
+	Category    string  `json:"category"`
+	Description string  `json:"description"`
 }
 
 // MockTranscriber is a mock implementation of Transcriber

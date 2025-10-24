@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"saldo/pkg/services"
@@ -136,9 +135,6 @@ func (b *Bot) handleMessage(ctx context.Context, botAPI *bot.Bot, update *models
 	case "➕ Add expense":
 		b.handleAddExpenseStart(ctx, botAPI, chatID, userID)
 		return
-	case "📂 Add category":
-		b.handleAddCategoryStart(ctx, botAPI, chatID, userID)
-		return
 	case "📊 Statistics":
 		b.handleStatistics(ctx, botAPI, chatID)
 		return
@@ -146,13 +142,9 @@ func (b *Bot) handleMessage(ctx context.Context, botAPI *bot.Bot, update *models
 
 	// Handle state-based input
 	switch stateData.State {
-	case StateAwaitingCategoryName:
-		b.handleCategoryNameInput(ctx, botAPI, chatID, userID, text)
 	case StateAwaitingExpense:
 		b.handleExpenseTextInput(ctx, botAPI, chatID, userID, dbUser, text)
-	case StateAwaitingDescription:
-		b.handleDescriptionInput(ctx, botAPI, chatID, userID, dbUser, text)
-	case StateIdle, StateAwaitingCategoryEmoji, StateAwaitingExpenseCategory:
+	case StateIdle:
 		// These states are handled via callbacks, not text input
 		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID: chatID,
@@ -165,32 +157,6 @@ func (b *Bot) handleMessage(ctx context.Context, botAPI *bot.Bot, update *models
 			Text:   "Используйте кнопки меню или /help для списка команд.",
 		})
 	}
-}
-
-// handleAddCategoryStart starts the add category flow
-func (b *Bot) handleAddCategoryStart(ctx context.Context, botAPI *bot.Bot, chatID int64, userID int64) {
-	b.stateManager.SetState(userID, StateAwaitingCategoryName)
-
-	_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID:    chatID,
-		Text:      "📂 <b>Создание категории</b>\n\nВведите название категории:",
-		ParseMode: models.ParseModeHTML,
-	})
-}
-
-// handleCategoryNameInput handles category name input
-func (b *Bot) handleCategoryNameInput(ctx context.Context, botAPI *bot.Bot, chatID int64, userID int64, categoryName string) {
-	// Save category name to state
-	stateData := b.stateManager.GetState(userID)
-	stateData.CategoryName = categoryName
-	stateData.State = StateAwaitingCategoryEmoji
-	b.stateManager.SetStateData(userID, stateData)
-
-	_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID:      chatID,
-		Text:        fmt.Sprintf("Отлично! Теперь выберите эмодзи для категории \"%s\":", categoryName),
-		ReplyMarkup: emojiKeyboard(),
-	})
 }
 
 // handleAddExpenseStart starts the add expense flow
@@ -229,7 +195,7 @@ func (b *Bot) handleExpenseTextInput(ctx context.Context, botAPI *bot.Bot, chatI
 	}
 
 	// Parse expense using LLM
-	parsed, err := b.llm.ParseExpense(ctx, text, categoryNames)
+	expenses, err := b.llm.ParseExpense(ctx, text, categoryNames)
 	if err != nil {
 		b.logger.Error(ctx, "failed to parse expense", "err", err)
 		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
@@ -239,103 +205,27 @@ func (b *Bot) handleExpenseTextInput(ctx context.Context, botAPI *bot.Bot, chatI
 		return
 	}
 
-	// Check if description is needed
-	if parsed.NeedsDescription {
-		// Save parsed data to state
-		stateData := b.stateManager.GetState(userID)
-		stateData.State = StateAwaitingDescription
-		stateData.ExpenseData = &ExpenseData{
-			Amount:   int(parsed.Amount * 100),
-			Currency: parsed.Currency,
-			Category: parsed.Category,
-		}
-		b.stateManager.SetStateData(userID, stateData)
-
-		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID:    chatID,
-			Text:      "⚠️ Пожалуйста, добавьте описание расхода:",
-			ParseMode: models.ParseModeHTML,
-		})
-		return
-	}
-
-	// Check if category is needed
-	if parsed.NeedsCategory || parsed.Category == "" {
-		// Save parsed data to state
-		stateData := b.stateManager.GetState(userID)
-		stateData.State = StateAwaitingExpenseCategory
-		stateData.ExpenseData = &ExpenseData{
-			Amount:      int(parsed.Amount * 100),
-			Currency:    parsed.Currency,
-			Description: parsed.Description,
-		}
-		b.stateManager.SetStateData(userID, stateData)
-
-		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID:      chatID,
-			Text:        "📂 Выберите категорию:",
-			ReplyMarkup: userCategoriesKeyboard(categories),
-		})
-		return
-	}
-
 	// Show confirmation
-	b.showExpenseConfirmation(ctx, botAPI, chatID, userID, parsed)
-}
-
-// handleDescriptionInput handles description input
-func (b *Bot) handleDescriptionInput(ctx context.Context, botAPI *bot.Bot, chatID int64, userID int64, user *User, description string) {
-	stateData := b.stateManager.GetState(userID)
-
-	if stateData.ExpenseData == nil {
-		b.stateManager.ClearState(userID)
-		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID: chatID,
-			Text:   "Ошибка: данные расхода не найдены.",
-		})
-		return
-	}
-
-	stateData.ExpenseData.Description = description
-
-	// Check if category is still needed
-	if stateData.ExpenseData.Category == "" {
-		// Get user categories
-		saldoCategories, err := b.saldo.GetUserCategories(ctx, user.ID)
-		if err != nil {
-			b.logger.Error(ctx, "failed to get categories", "err", err)
-			return
-		}
-
-		categories := NewCategories(saldoCategories)
-		stateData.State = StateAwaitingExpenseCategory
-		b.stateManager.SetStateData(userID, stateData)
-
-		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID:      chatID,
-			Text:        "📂 Выберите категорию:",
-			ReplyMarkup: userCategoriesKeyboard(categories),
-		})
-		return
-	}
-
-	// Create expense
-	b.createExpense(ctx, botAPI, chatID, userID, user, stateData.ExpenseData)
+	b.showExpenseConfirmation(ctx, botAPI, chatID, userID, expenses)
 }
 
 // showExpenseConfirmation shows expense details for confirmation
-func (b *Bot) showExpenseConfirmation(ctx context.Context, botAPI *bot.Bot, chatID int64, userID int64, parsed *services.ParsedExpense) {
+func (b *Bot) showExpenseConfirmation(ctx context.Context, botAPI *bot.Bot, chatID int64, userID int64, expenses []services.ParsedExpense) {
 	// Save to state for confirmation
 	stateData := b.stateManager.GetState(userID)
-	stateData.ExpenseData = &ExpenseData{
-		Amount:      int(parsed.Amount * 100),
-		Currency:    parsed.Currency,
-		Category:    parsed.Category,
-		Description: parsed.Description,
+	stateData.ExpensesData = make([]ExpenseData, len(expenses))
+
+	for i, exp := range expenses {
+		stateData.ExpensesData[i] = ExpenseData{
+			Amount:      int(exp.Amount * 100),
+			Currency:    exp.Currency,
+			Category:    exp.Category,
+			Description: exp.Description,
+		}
 	}
 	b.stateManager.SetStateData(userID, stateData)
 
-	text := "✅ <b>Подтвердите расход:</b>\n\n" + services.FormatExpenseDetails(parsed)
+	text := "✅ <b>Подтвердите расходы:</b>\n\n" + services.FormatExpenseDetails(expenses)
 
 	_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
 		ChatID:      chatID,
@@ -345,36 +235,34 @@ func (b *Bot) showExpenseConfirmation(ctx context.Context, botAPI *bot.Bot, chat
 	})
 }
 
-// createExpense creates expense in database
-func (b *Bot) createExpense(ctx context.Context, botAPI *bot.Bot, chatID int64, userID int64, user *User, expenseData *ExpenseData) {
+// createExpense creates expenses in database
+func (b *Bot) createExpenses(ctx context.Context, botAPI *bot.Bot, chatID int64, userID int64, user *User, expenses []ExpenseData) {
 	// Create expense with category
-	_, err := b.saldo.CreateExpenseWithCategory(
-		ctx,
-		user.ID,
-		expenseData.Amount,
-		expenseData.Currency,
-		expenseData.Category,
-		expenseData.Description,
-	)
-	if err != nil {
-		b.logger.Error(ctx, "failed to create expense", "err", err)
-		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID: chatID,
-			Text:   "Ошибка сохранения расхода.",
-		})
-		return
+	for _, exp := range expenses {
+		_, err := b.saldo.CreateExpenseWithCategory(
+			ctx,
+			user.ID,
+			exp.Amount,
+			exp.Currency,
+			exp.Category,
+			exp.Description,
+		)
+		if err != nil {
+			b.logger.Error(ctx, "failed to create expense", "err", err)
+			_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
+				ChatID: chatID,
+				Text:   "Ошибка сохранения расхода.",
+			})
+			return
+		}
 	}
 
 	// Clear state
 	b.stateManager.ClearState(userID)
 
 	_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID: chatID,
-		Text: fmt.Sprintf("✅ Расход добавлен!\n\n💰 %.2f %s\n📝 %s",
-			float64(expenseData.Amount)/100,
-			expenseData.Currency,
-			expenseData.Description,
-		),
+		ChatID:      chatID,
+		Text:        "✅ Расходы добавлены!\n\n💰",
 		ReplyMarkup: mainMenuKeyboard(),
 	})
 }
@@ -519,10 +407,6 @@ func (b *Bot) handleCallback(ctx context.Context, botAPI *bot.Bot, update *model
 	value := parts[1]
 
 	switch action {
-	case "emoji":
-		b.handleEmojiSelection(ctx, botAPI, callback, chatID, userID, user, value)
-	case "select_cat":
-		b.handleCategorySelection(ctx, botAPI, callback, chatID, userID, user, value)
 	case "expense":
 		b.handleExpenseAction(ctx, botAPI, callback, chatID, userID, user, value)
 	default:
@@ -531,116 +415,6 @@ func (b *Bot) handleCallback(ctx context.Context, botAPI *bot.Bot, update *model
 			Text:            "Неизвестное действие",
 		})
 	}
-}
-
-// handleEmojiSelection handles emoji selection for category
-func (b *Bot) handleEmojiSelection(ctx context.Context, botAPI *bot.Bot, callback *models.CallbackQuery, chatID int64, userID int64, user *User, emoji string) {
-	if emoji == "cancel" {
-		b.stateManager.ClearState(userID)
-		_, _ = botAPI.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
-			CallbackQueryID: callback.ID,
-		})
-		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID:      chatID,
-			Text:        "Отменено.",
-			ReplyMarkup: mainMenuKeyboard(),
-		})
-		return
-	}
-
-	stateData := b.stateManager.GetState(userID)
-	if stateData.State != StateAwaitingCategoryEmoji || stateData.CategoryName == "" {
-		_, _ = botAPI.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
-			CallbackQueryID: callback.ID,
-			Text:            "Ошибка: нет данных категории",
-			ShowAlert:       true,
-		})
-		return
-	}
-
-	// Create category
-	_, err := b.saldo.CreateCategory(ctx, user.ID, stateData.CategoryName, &emoji)
-	if err != nil {
-		b.logger.Error(ctx, "failed to create category", "err", err)
-		_, _ = botAPI.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
-			CallbackQueryID: callback.ID,
-			Text:            "Ошибка создания категории",
-			ShowAlert:       true,
-		})
-		return
-	}
-
-	// Clear state
-	b.stateManager.ClearState(userID)
-
-	_, _ = botAPI.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
-		CallbackQueryID: callback.ID,
-		Text:            "Категория создана!",
-	})
-
-	_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID: chatID,
-		Text: fmt.Sprintf("✅ Категория создана!\n\n%s %s",
-			emoji,
-			stateData.CategoryName,
-		),
-		ReplyMarkup: mainMenuKeyboard(),
-	})
-}
-
-// handleCategorySelection handles category selection for expense
-func (b *Bot) handleCategorySelection(ctx context.Context, botAPI *bot.Bot, callback *models.CallbackQuery, chatID int64, userID int64, user *User, value string) {
-	if value == "new" {
-		// Start new category flow
-		_, _ = botAPI.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
-			CallbackQueryID: callback.ID,
-		})
-		b.handleAddCategoryStart(ctx, botAPI, chatID, userID)
-		return
-	}
-
-	// Parse category ID
-	categoryID, err := strconv.Atoi(value)
-	if err != nil {
-		_, _ = botAPI.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
-			CallbackQueryID: callback.ID,
-			Text:            "Ошибка: неверный ID категории",
-			ShowAlert:       true,
-		})
-		return
-	}
-
-	// Get category
-	saldoCategory, err := b.saldo.GetCategoryByID(ctx, categoryID)
-	if err != nil || saldoCategory == nil {
-		_, _ = botAPI.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
-			CallbackQueryID: callback.ID,
-			Text:            "Ошибка: категория не найдена",
-			ShowAlert:       true,
-		})
-		return
-	}
-
-	stateData := b.stateManager.GetState(userID)
-	if stateData.ExpenseData == nil {
-		_, _ = botAPI.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
-			CallbackQueryID: callback.ID,
-			Text:            "Ошибка: нет данных расхода",
-			ShowAlert:       true,
-		})
-		return
-	}
-
-	// Update expense data with category
-	category := NewCategory(saldoCategory)
-	stateData.ExpenseData.Category = category.Title
-
-	// Create expense
-	b.createExpense(ctx, botAPI, chatID, userID, user, stateData.ExpenseData)
-
-	_, _ = botAPI.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
-		CallbackQueryID: callback.ID,
-	})
 }
 
 // handleExpenseAction handles expense confirmation/cancellation
@@ -660,7 +434,7 @@ func (b *Bot) handleExpenseAction(ctx context.Context, botAPI *bot.Bot, callback
 
 	if action == "confirm" {
 		stateData := b.stateManager.GetState(userID)
-		if stateData.ExpenseData == nil {
+		if stateData.ExpensesData == nil {
 			_, _ = botAPI.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
 				CallbackQueryID: callback.ID,
 				Text:            "Ошибка: нет данных расхода",
@@ -669,7 +443,7 @@ func (b *Bot) handleExpenseAction(ctx context.Context, botAPI *bot.Bot, callback
 			return
 		}
 
-		b.createExpense(ctx, botAPI, chatID, userID, user, stateData.ExpenseData)
+		b.createExpenses(ctx, botAPI, chatID, userID, user, stateData.ExpensesData)
 
 		_, _ = botAPI.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
 			CallbackQueryID: callback.ID,

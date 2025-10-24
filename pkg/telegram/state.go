@@ -8,19 +8,14 @@ import (
 type UserState string
 
 const (
-	StateIdle                    UserState = "idle"
-	StateAwaitingCategoryName    UserState = "awaiting_category_name"
-	StateAwaitingCategoryEmoji   UserState = "awaiting_category_emoji"
-	StateAwaitingExpense         UserState = "awaiting_expense"
-	StateAwaitingExpenseCategory UserState = "awaiting_expense_category"
-	StateAwaitingDescription     UserState = "awaiting_description"
+	StateIdle            UserState = "idle"
+	StateAwaitingExpense UserState = "awaiting_expense"
 )
 
 // UserStateData holds temporary data for user's current operation
 type UserStateData struct {
 	State        UserState
-	CategoryName string
-	ExpenseData  *ExpenseData
+	ExpensesData []ExpenseData
 }
 
 // ExpenseData holds parsed expense information

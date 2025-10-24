@@ -12,7 +12,7 @@ import (
 
 // LLM handles expense parsing from text
 type LLM interface {
-	ParseExpense(ctx context.Context, text string, userCategories []string) (*ParsedExpense, error)
+	ParseExpense(ctx context.Context, text string, userCategories []string) ([]ParsedExpense, error)
 }
 
 // MockLLMService is a mock implementation of LLMService
@@ -81,14 +81,9 @@ func (m *MockLLMService) ParseExpense(ctx context.Context, text string, userCate
 		for keyword, category := range categoryKeywords {
 			if strings.Contains(textLower, keyword) {
 				parsed.Category = category
-				categoryFound = true
 				break
 			}
 		}
-	}
-
-	if !categoryFound {
-		parsed.NeedsCategory = true
 	}
 
 	// Extract description (everything that's not amount or category)
@@ -110,7 +105,6 @@ func (m *MockLLMService) ParseExpense(ctx context.Context, text string, userCate
 	description = strings.TrimSpace(description)
 
 	if description == "" || len(description) < 3 {
-		parsed.NeedsDescription = true
 		parsed.Description = ""
 	} else {
 		parsed.Description = description
@@ -119,15 +113,17 @@ func (m *MockLLMService) ParseExpense(ctx context.Context, text string, userCate
 	return parsed, nil
 }
 
-// FormatExpenseDetails formats expense details for user confirmation
-func FormatExpenseDetails(expense *ParsedExpense) string {
-	return fmt.Sprintf(
-		"💰 <b>Сумма:</b> %.2f %s\n"+
-			"📂 <b>Категория:</b> %s\n"+
-			"📝 <b>Описание:</b> %s",
-		expense.Amount,
-		expense.Currency,
-		expense.Category,
-		expense.Description,
-	)
+// FormatExpenseDetails formats expenses details for user confirmation
+func FormatExpenseDetails(expenses []ParsedExpense) string {
+	var b strings.Builder
+
+	for _, e := range expenses {
+		fmt.Fprintf(&b, "💰 %.2f %s — %s", e.Amount, e.Currency, e.Category)
+		if e.Description != "" {
+			fmt.Fprintf(&b, " (%s)", e.Description)
+		}
+		b.WriteString("\n")
+	}
+
+	return strings.TrimSpace(b.String())
 }
