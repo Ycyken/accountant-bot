@@ -105,17 +105,21 @@ func (a *App) Shutdown(timeout time.Duration) error {
 	return a.echo.Shutdown(ctx)
 }
 
-// registerMetadata is a function that registers meta info from service. Must be updated.
+// registerMetadata is a function that registers meta info from service.
 func (a *App) registerMetadata() {
+	services := []appkit.ServiceMetadata{}
+	if a.tgBot != nil {
+		// Telegram bot runs asynchronously in a separate goroutine
+		services = append(services, appkit.NewServiceMetadata("telegram-bot", appkit.MetadataServiceTypeAsync))
+	}
+
 	opts := appkit.MetadataOpts{
-		HasPublicAPI:  false, // No public API for Telegram bot
+		HasPublicAPI:  false, // No public API, only Telegram bot
 		HasPrivateAPI: false,
 		DBs: []appkit.DBMetadata{
 			appkit.NewDBMetadata(a.cfg.Database.Database, a.cfg.Database.PoolSize, false),
 		},
-		Services: []appkit.ServiceMetadata{
-			// Services will be added later for Telegram bot
-		},
+		Services: services,
 	}
 
 	md := appkit.NewMetadataManager(opts)

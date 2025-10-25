@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"saldo/pkg/services"
 
@@ -18,6 +19,7 @@ import (
 
 // handleStart handles /start command - registers or welcomes user
 func (b *Bot) handleStart(ctx context.Context, botAPI *bot.Bot, update *models.Update) {
+	commandsProcessed.WithLabelValues("start").Inc()
 	if update.Message == nil || update.Message.From == nil {
 		return
 	}
@@ -28,6 +30,7 @@ func (b *Bot) handleStart(ctx context.Context, botAPI *bot.Bot, update *models.U
 	// Try to get or create user in database
 	dbUser, err := b.getOrCreateUser(ctx, user)
 	if err != nil {
+		errorsTotal.WithLabelValues("user_registration").Inc()
 		b.logger.Error(ctx, "failed to get or create user", "err", err, "telegram_user_id", user.ID)
 		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID: chatID,
@@ -57,6 +60,7 @@ func (b *Bot) handleStart(ctx context.Context, botAPI *bot.Bot, update *models.U
 
 // handleHelp handles /help command
 func (b *Bot) handleHelp(ctx context.Context, botAPI *bot.Bot, update *models.Update) {
+	commandsProcessed.WithLabelValues("help").Inc()
 	if update.Message == nil || update.Message.From == nil {
 		return
 	}
@@ -82,24 +86,9 @@ func (b *Bot) handleHelp(ctx context.Context, botAPI *bot.Bot, update *models.Up
 	})
 }
 
-// handleCancel handles /cancel command
-func (b *Bot) handleCancel(ctx context.Context, botAPI *bot.Bot, update *models.Update) {
-	if update.Message == nil || update.Message.From == nil {
-		return
-	}
-
-	// Clear user state
-	b.stateManager.ClearState(update.Message.From.ID)
-
-	_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID:      update.Message.Chat.ID,
-		Text:        "✅ Операция отменена.",
-		ReplyMarkup: mainMenuKeyboard(),
-	})
-}
-
 // handleMessage handles text messages (keyboard buttons and state-based input)
 func (b *Bot) handleMessage(ctx context.Context, botAPI *bot.Bot, update *models.Update) {
+	messagesProcessed.WithLabelValues("text").Inc()
 	if update.Message == nil || update.Message.From == nil {
 		return
 	}
@@ -110,6 +99,7 @@ func (b *Bot) handleMessage(ctx context.Context, botAPI *bot.Bot, update *models
 	// Get user from DB
 	dbUser, err := b.getUserByTelegramID(ctx, userID)
 	if err != nil || dbUser == nil {
+		errorsTotal.WithLabelValues("user_not_found").Inc()
 		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID: chatID,
 			Text:   "Пожалуйста, используйте /start для начала работы.",
@@ -143,40 +133,52 @@ func (b *Bot) handleMessage(ctx context.Context, botAPI *bot.Bot, update *models
 	// Handle keyboard buttons
 	switch text {
 	case "➕ Add expense":
+		buttonsPressed.WithLabelValues("add_expense").Inc()
 		b.handleAddExpenseStart(ctx, botAPI, chatID, userID)
 		return
 	case "📊 Statistics":
+		buttonsPressed.WithLabelValues("statistics").Inc()
 		b.handleStatistics(ctx, botAPI, chatID, userID, dbUser)
 		return
 	case "💰 Траты за неделю":
+		buttonsPressed.WithLabelValues("week_expenses").Inc()
 		period := GetWeekPeriod()
 		b.handleStatisticsByExpenses(ctx, botAPI, chatID, userID, dbUser, period)
 		return
 	case "🔙 Назад":
+		buttonsPressed.WithLabelValues("back").Inc()
 		b.handleBack(ctx, botAPI, chatID, userID, stateData)
 		return
 	case "🔙 К статистике":
+		buttonsPressed.WithLabelValues("to_statistics").Inc()
 		b.handleStatistics(ctx, botAPI, chatID, userID, dbUser)
 		return
 	case "📊 По категориям":
+		buttonsPressed.WithLabelValues("by_categories").Inc()
 		b.handleStatsTypeSelection(ctx, botAPI, chatID, userID, "categories")
 		return
 	case "💸 По тратам":
+		buttonsPressed.WithLabelValues("by_expenses").Inc()
 		b.handleStatsTypeSelection(ctx, botAPI, chatID, userID, "expenses")
 		return
 	case "📅 За сегодня":
+		buttonsPressed.WithLabelValues("period_today").Inc()
 		b.handlePeriodSelection(ctx, botAPI, chatID, userID, dbUser, stateData, "today")
 		return
 	case "📅 За неделю":
+		buttonsPressed.WithLabelValues("period_week").Inc()
 		b.handlePeriodSelection(ctx, botAPI, chatID, userID, dbUser, stateData, "week")
 		return
 	case "📅 За месяц":
+		buttonsPressed.WithLabelValues("period_month").Inc()
 		b.handlePeriodSelection(ctx, botAPI, chatID, userID, dbUser, stateData, "month")
 		return
 	case "📅 За всё время":
+		buttonsPressed.WithLabelValues("period_alltime").Inc()
 		b.handlePeriodSelection(ctx, botAPI, chatID, userID, dbUser, stateData, "alltime")
 		return
 	case "📅 Кастомный период":
+		buttonsPressed.WithLabelValues("period_custom").Inc()
 		b.handleCustomPeriodStart(ctx, botAPI, chatID, userID, stateData)
 		return
 	}
@@ -215,6 +217,7 @@ func (b *Bot) handleExpenseTextInput(ctx context.Context, botAPI *bot.Bot, chatI
 	// Get user categories
 	saldoCategories, err := b.saldo.GetUserCategories(ctx, user.ID)
 	if err != nil {
+		errorsTotal.WithLabelValues("get_categories").Inc()
 		b.logger.Error(ctx, "failed to get categories", "err", err)
 		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID:      chatID,
@@ -232,9 +235,13 @@ func (b *Bot) handleExpenseTextInput(ctx context.Context, botAPI *bot.Bot, chatI
 		categoryNames[i] = cat.Title
 	}
 
-	// Parse expense using LLM
+	// Parse expense using LLM with timing
+	startTime := time.Now()
 	expenses, err := b.llm.ParseExpenses(ctx, text, categoryNames)
+	llmParseDuration.Observe(time.Since(startTime).Seconds())
+
 	if err != nil {
+		errorsTotal.WithLabelValues("llm_parse").Inc()
 		b.logger.Error(ctx, "failed to parse expense", "err", err)
 		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID:      chatID,
@@ -245,6 +252,7 @@ func (b *Bot) handleExpenseTextInput(ctx context.Context, botAPI *bot.Bot, chatI
 	}
 
 	if len(expenses) == 0 {
+		errorsTotal.WithLabelValues("llm_parse_failed").Inc()
 		b.logger.Print(ctx, "пользователь ввёл сообщение без расходов", "err", err)
 		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID:      chatID,
@@ -286,8 +294,18 @@ func (b *Bot) showExpenseConfirmation(ctx context.Context, botAPI *bot.Bot, chat
 
 // createExpense creates expenses in database
 func (b *Bot) createExpenses(ctx context.Context, botAPI *bot.Bot, chatID int64, userID int64, user *User, expenses []ExpenseData) {
+	// Get existing categories to track new ones
+	existingCategories, _ := b.saldo.GetUserCategories(ctx, user.ID)
+	existingCategoryMap := make(map[string]bool)
+	for _, cat := range existingCategories {
+		existingCategoryMap[cat.Title] = true
+	}
+
 	// Create expense with category
 	for _, exp := range expenses {
+		// Track if category is new
+		categoryIsNew := exp.Category != "" && !existingCategoryMap[exp.Category]
+
 		_, err := b.saldo.CreateExpenseWithCategory(
 			ctx,
 			user.ID,
@@ -297,12 +315,21 @@ func (b *Bot) createExpenses(ctx context.Context, botAPI *bot.Bot, chatID int64,
 			exp.Description,
 		)
 		if err != nil {
+			errorsTotal.WithLabelValues("database").Inc()
 			b.logger.Error(ctx, "failed to create expense", "err", err)
 			_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
 				ChatID: chatID,
 				Text:   "Ошибка сохранения расхода.",
 			})
 			return
+		}
+
+		expensesCreated.Inc()
+
+		// Increment category counter if new category was created
+		if categoryIsNew {
+			categoriesCreated.Inc()
+			existingCategoryMap[exp.Category] = true // Mark as existing for next expense
 		}
 	}
 
@@ -359,6 +386,7 @@ func (b *Bot) downloadTgFile(ctx context.Context, botAPI *bot.Bot, fileID string
 
 // handleVoice handles voice messages
 func (b *Bot) handleVoice(ctx context.Context, botAPI *bot.Bot, update *models.Update, user *User) {
+	messagesProcessed.WithLabelValues("voice").Inc()
 	if update.Message == nil || update.Message.From == nil || update.Message.Voice == nil {
 		return
 	}
@@ -370,6 +398,7 @@ func (b *Bot) handleVoice(ctx context.Context, botAPI *bot.Bot, update *models.U
 	b.logger.Print(ctx, "received voice message", "file_id", voiceFileID)
 	tmpOgg, err := b.downloadTgFile(ctx, botAPI, voiceFileID)
 	if err != nil {
+		errorsTotal.WithLabelValues("download_file").Inc()
 		b.logger.Error(ctx, "failed to download voice file", "err", err)
 		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID:      chatID,
@@ -380,10 +409,14 @@ func (b *Bot) handleVoice(ctx context.Context, botAPI *bot.Bot, update *models.U
 	}
 	defer os.Remove(tmpOgg)
 
-	// Mock transcription
+	// Transcribe voice message with timing
+	startTime := time.Now()
 	transcription, err := b.transcriber.Transcribe(ctx, tmpOgg)
+	transcriptionDuration.Observe(time.Since(startTime).Seconds())
+
 	b.logger.Print(ctx, "transcription result", "text", transcription)
 	if err != nil {
+		errorsTotal.WithLabelValues("transcription").Inc()
 		b.logger.Error(ctx, "failed to transcribe voice", "err", err)
 		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID:      chatID,
@@ -511,6 +544,7 @@ func (b *Bot) handleStatisticsByCategories(ctx context.Context, botAPI *bot.Bot,
 	// Get all expenses for user
 	expenses, err := b.saldo.GetUserExpenses(ctx, user.ID)
 	if err != nil {
+		errorsTotal.WithLabelValues("database").Inc()
 		b.logger.Error(ctx, "failed to get expenses", "err", err)
 		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID: chatID,
@@ -689,6 +723,7 @@ func (b *Bot) handleStatisticsByExpenses(ctx context.Context, botAPI *bot.Bot, c
 	// Get all expenses for user
 	expenses, err := b.saldo.GetUserExpenses(ctx, user.ID)
 	if err != nil {
+		errorsTotal.WithLabelValues("database").Inc()
 		b.logger.Error(ctx, "failed to get expenses", "err", err)
 		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID: chatID,
@@ -848,6 +883,7 @@ func (b *Bot) handleCallback(ctx context.Context, botAPI *bot.Bot, update *model
 	// Get user from DB
 	user, err := b.getUserByTelegramID(ctx, userID)
 	if err != nil || user == nil {
+		errorsTotal.WithLabelValues("user_not_found").Inc()
 		_, _ = botAPI.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
 			CallbackQueryID: callback.ID,
 			Text:            "Ошибка: пользователь не найден",
@@ -879,6 +915,7 @@ func (b *Bot) handleCallback(ctx context.Context, botAPI *bot.Bot, update *model
 // handleExpenseAction handles expense confirmation/cancellation
 func (b *Bot) handleExpenseAction(ctx context.Context, botAPI *bot.Bot, callback *models.CallbackQuery, chatID int64, userID int64, user *User, action string) {
 	if action == "cancel" {
+		callbacksProcessed.WithLabelValues("cancel").Inc()
 		b.stateManager.ClearState(userID)
 		_, _ = botAPI.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
 			CallbackQueryID: callback.ID,
@@ -893,6 +930,7 @@ func (b *Bot) handleExpenseAction(ctx context.Context, botAPI *bot.Bot, callback
 	}
 
 	if action == "confirm" {
+		callbacksProcessed.WithLabelValues("confirm").Inc()
 		stateData := b.stateManager.GetState(userID)
 		if stateData.ExpensesData == nil {
 			_, _ = botAPI.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{

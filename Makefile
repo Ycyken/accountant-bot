@@ -85,12 +85,34 @@ db:
 	@psql -f docs/$(NAME).sql $(PGDATABASE)
 	@psql -f docs/init.sql $(PGDATABASE)
 
+
+
 EXEC = docker exec postgres
-docker-db:
+
+# Full reset: stop all, drop volumes, restart, init DB
+docker-reset:
+	@cd deployments && docker compose down
+	@docker volume rm deployments_pgdata deployments_prometheus_data deployments_grafana_data 2>/dev/null || true
+	@cd deployments && docker compose up -d
+	@sleep 3
+	@$(EXEC) psql -U $(PGUSER) -f /docs/$(NAME).sql $(PGDATABASE)
+	@$(EXEC) psql -U $(PGUSER) -f /docs/init.sql $(PGDATABASE)
+
+# Reset only database (requires running postgres container)
+docker-reset-db:
+	@docker ps | grep -q postgres || (echo "Error: postgres container not running" && exit 1)
 	@$(EXEC) dropdb -U $(PGUSER) --if-exists -f $(PGDATABASE)
 	@$(EXEC) createdb -U $(PGUSER) $(PGDATABASE)
 	@$(EXEC) psql -U $(PGUSER) -f /docs/$(NAME).sql $(PGDATABASE)
 	@$(EXEC) psql -U $(PGUSER) -f /docs/init.sql $(PGDATABASE)
+
+# Reset only Prometheus metrics (restarts bot to clear in-memory metrics)
+docker-reset-metrics:
+	@cd deployments && docker compose stop prometheus bot
+	@cd deployments && docker compose rm -f prometheus
+	@docker volume rm deployments_prometheus_data 2>/dev/null || true
+	@cd deployments && docker compose up -d prometheus bot
+
 
 db-test:
 	@$(MAKE) --no-print-directory db PGDATABASE=${TEST_PGDATABASE}
@@ -121,7 +143,6 @@ type-script-client: generate
 deploy: models
 	sh deployments/env_from_toml.sh
 	docker compose -f deployments/docker-compose.yml up -d --build
-
 
 --check-ns:
 ifeq ($(NS),"NONE")

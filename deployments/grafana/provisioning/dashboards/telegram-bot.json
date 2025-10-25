@@ -1,0 +1,90 @@
+{
+  "title": "Telegram Bot Metrics",
+  "uid": "telegram-bot",
+  "editable": true,
+  "timezone": "browser",
+  "refresh": "5s",
+  "panels": [
+    {
+      "title": "Commands Over Time",
+      "type": "graph",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "targets": [{"expr": "telegram_commands_processed_total", "legendFormat": "{{command}}"}],
+      "yaxes": [{"format": "short", "label": "Count"}, {"show": false}]
+    },
+    {
+      "title": "Messages Over Time",
+      "type": "graph",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "targets": [{"expr": "telegram_messages_processed_total", "legendFormat": "{{type}}"}],
+      "yaxes": [{"format": "short", "label": "Count"}, {"show": false}]
+    },
+    {
+      "title": "Buttons Pressed Over Time",
+      "type": "graph",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "targets": [{"expr": "telegram_buttons_pressed_total", "legendFormat": "{{button}}"}],
+      "yaxes": [{"format": "short", "label": "Count"}, {"show": false}]
+    },
+    {
+      "title": "Callbacks Over Time",
+      "type": "graph",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "targets": [{"expr": "telegram_callbacks_processed_total", "legendFormat": "{{action}}"}],
+      "yaxes": [{"format": "short", "label": "Count"}, {"show": false}]
+    },
+    {
+      "title": "Expenses & Categories Created",
+      "type": "graph",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
+      "targets": [
+        {"expr": "telegram_expenses_created_total", "legendFormat": "Expenses"},
+        {"expr": "telegram_categories_created_total", "legendFormat": "Categories"}
+      ],
+      "yaxes": [{"format": "short", "label": "Count"}, {"show": false}]
+    },
+    {
+      "title": "Errors Over Time",
+      "type": "graph",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+      "targets": [{"expr": "telegram_errors_total", "legendFormat": "{{type}}"}],
+      "yaxes": [{"format": "short", "label": "Count"}, {"show": false}]
+    },
+    {
+      "title": "Total LLM Parses & Transcriptions",
+      "type": "stat",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+      "targets": [
+        {"expr": "telegram_llm_parse_duration_seconds_count", "legendFormat": "LLM Parses"},
+        {"expr": "telegram_transcription_duration_seconds_count", "legendFormat": "Transcriptions"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "short"}}
+    },
+    {
+      "title": "LLM Parse Duration: Count <= Threshold",
+      "type": "graph",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32},
+      "targets": [
+        {"expr": "telegram_llm_parse_duration_seconds_bucket{le=\"0.5\"}", "legendFormat": "<= 0.5s"},
+        {"expr": "telegram_llm_parse_duration_seconds_bucket{le=\"1\"}", "legendFormat": "<= 1s"},
+        {"expr": "telegram_llm_parse_duration_seconds_bucket{le=\"2.5\"}", "legendFormat": "<= 2.5s"},
+        {"expr": "telegram_llm_parse_duration_seconds_bucket{le=\"5\"}", "legendFormat": "<= 5s"},
+        {"expr": "telegram_llm_parse_duration_seconds_count", "legendFormat": "Total"}
+      ],
+      "yaxes": [{"format": "short", "label": "Count", "decimals": 0}, {"show": false}]
+    },
+    {
+      "title": "Transcription Duration: Count <= Threshold",
+      "type": "graph",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32},
+      "targets": [
+        {"expr": "telegram_transcription_duration_seconds_bucket{le=\"1\"}", "legendFormat": "<= 1s"},
+        {"expr": "telegram_transcription_duration_seconds_bucket{le=\"2.5\"}", "legendFormat": "<= 2.5s"},
+        {"expr": "telegram_transcription_duration_seconds_bucket{le=\"5\"}", "legendFormat": "<= 5s"},
+        {"expr": "telegram_transcription_duration_seconds_bucket{le=\"10\"}", "legendFormat": "<= 10s"},
+        {"expr": "telegram_transcription_duration_seconds_count", "legendFormat": "Total"}
+      ],
+      "yaxes": [{"format": "short", "label": "Count", "decimals": 0}, {"show": false}]
+    }
+  ]
+}
