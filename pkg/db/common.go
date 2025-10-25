@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"errors"
+	"io"
 
 	"github.com/go-pg/pg/v10"
 	"github.com/go-pg/pg/v10/orm"
@@ -80,7 +81,7 @@ func (cr CommonRepo) OneUser(ctx context.Context, search *UserSearch, ops ...OpF
 
 	if errors.Is(err, pg.ErrMultiRows) {
 		return nil, err
-	} else if errors.Is(err, pg.ErrNoRows) {
+	} else if errors.Is(err, pg.ErrNoRows) || errors.Is(err, io.EOF) {
 		return nil, nil
 	}
 
@@ -156,7 +157,7 @@ func (cr CommonRepo) OneCategory(ctx context.Context, search *CategorySearch, op
 
 	if errors.Is(err, pg.ErrMultiRows) {
 		return nil, err
-	} else if errors.Is(err, pg.ErrNoRows) {
+	} else if errors.Is(err, pg.ErrNoRows) || errors.Is(err, io.EOF) {
 		return nil, nil
 	}
 
@@ -232,7 +233,7 @@ func (cr CommonRepo) OneExpense(ctx context.Context, search *ExpenseSearch, ops 
 
 	if errors.Is(err, pg.ErrMultiRows) {
 		return nil, err
-	} else if errors.Is(err, pg.ErrNoRows) {
+	} else if errors.Is(err, pg.ErrNoRows) || errors.Is(err, io.EOF) {
 		return nil, nil
 	}
 
