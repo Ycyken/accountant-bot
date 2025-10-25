@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"saldo/pkg/services"
@@ -56,7 +57,7 @@ func (b *Bot) handleStart(ctx context.Context, botAPI *bot.Bot, update *models.U
 
 // handleHelp handles /help command
 func (b *Bot) handleHelp(ctx context.Context, botAPI *bot.Bot, update *models.Update) {
-	if update.Message == nil {
+	if update.Message == nil || update.Message.From == nil {
 		return
 	}
 
@@ -69,10 +70,7 @@ func (b *Bot) handleHelp(ctx context.Context, botAPI *bot.Bot, update *models.Up
 Создайте новую категорию расходов с эмодзи.
 
 <b>📊 Statistics</b> - Статистика
-Показывает распределение расходов по категориям (в разработке).
-
-<b>/cancel</b> - Отмена
-Отменяет текущую операцию.
+Показывает распределение расходов по категориям.
 
 💡 <i>Совет:</i> Используйте кнопки меню для быстрого доступа к функциям.`
 
@@ -119,16 +117,28 @@ func (b *Bot) handleMessage(ctx context.Context, botAPI *bot.Bot, update *models
 		return
 	}
 
-	// Check if this is a voice message
-	if update.Message.Voice != nil {
-		b.handleVoice(ctx, botAPI, update, dbUser)
-		return
-	}
-
 	text := update.Message.Text
 
 	// Check current state
 	stateData := b.stateManager.GetState(userID)
+
+	// Check if this is a voice message
+	if update.Message.Voice != nil {
+		// If awaiting custom period, reject voice input
+		if stateData.State == StateAwaitingCustomPeriod {
+			_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
+				ChatID: chatID,
+				Text:   "Пожалуйста, введите период текстом в формате: ДД.ММ.ГГ ДД.ММ.ГГ",
+			})
+			return
+		}
+		// Clear any pending expense state and process voice as new expense
+		if stateData.ExpensesData != nil {
+			b.stateManager.ClearState(userID)
+		}
+		b.handleVoice(ctx, botAPI, update, dbUser)
+		return
+	}
 
 	// Handle keyboard buttons
 	switch text {
@@ -136,27 +146,54 @@ func (b *Bot) handleMessage(ctx context.Context, botAPI *bot.Bot, update *models
 		b.handleAddExpenseStart(ctx, botAPI, chatID, userID)
 		return
 	case "📊 Statistics":
-		b.handleStatistics(ctx, botAPI, chatID)
+		b.handleStatistics(ctx, botAPI, chatID, userID, dbUser)
+		return
+	case "💰 Траты за неделю":
+		period := GetWeekPeriod()
+		b.handleStatisticsByExpenses(ctx, botAPI, chatID, userID, dbUser, period)
+		return
+	case "🔙 Назад":
+		b.handleBack(ctx, botAPI, chatID, userID, stateData)
+		return
+	case "🔙 К статистике":
+		b.handleStatistics(ctx, botAPI, chatID, userID, dbUser)
+		return
+	case "📊 По категориям":
+		b.handleStatsTypeSelection(ctx, botAPI, chatID, userID, "categories")
+		return
+	case "💸 По тратам":
+		b.handleStatsTypeSelection(ctx, botAPI, chatID, userID, "expenses")
+		return
+	case "📅 За сегодня":
+		b.handlePeriodSelection(ctx, botAPI, chatID, userID, dbUser, stateData, "today")
+		return
+	case "📅 За неделю":
+		b.handlePeriodSelection(ctx, botAPI, chatID, userID, dbUser, stateData, "week")
+		return
+	case "📅 За месяц":
+		b.handlePeriodSelection(ctx, botAPI, chatID, userID, dbUser, stateData, "month")
+		return
+	case "📅 За всё время":
+		b.handlePeriodSelection(ctx, botAPI, chatID, userID, dbUser, stateData, "alltime")
+		return
+	case "📅 Кастомный период":
+		b.handleCustomPeriodStart(ctx, botAPI, chatID, userID, stateData)
 		return
 	}
 
-	// Handle state-based input
-	switch stateData.State {
-	case StateAwaitingExpense:
-		b.handleExpenseTextInput(ctx, botAPI, chatID, userID, dbUser, text)
-	case StateIdle:
-		// These states are handled via callbacks, not text input
-		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID: chatID,
-			Text:   "Используйте кнопки меню или /help для списка команд.",
-		})
-	default:
-		// Unknown message
-		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID: chatID,
-			Text:   "Используйте кнопки меню или /help для списка команд.",
-		})
+	// Check if user is entering custom period
+	if stateData.State == StateAwaitingCustomPeriod {
+		b.handleCustomPeriodInput(ctx, botAPI, chatID, userID, dbUser, text)
+		return
 	}
+
+	// Clear any pending expense state and treat message as new expense input
+	if stateData.ExpensesData != nil {
+		b.stateManager.ClearState(userID)
+	}
+
+	// Any other text message is treated as expense input
+	b.handleExpenseTextInput(ctx, botAPI, chatID, userID, dbUser, text)
 }
 
 // handleAddExpenseStart starts the add expense flow
@@ -167,9 +204,9 @@ func (b *Bot) handleAddExpenseStart(ctx context.Context, botAPI *bot.Bot, chatID
 		ChatID: chatID,
 		Text: "💰 <b>Добавление расхода</b>\n\n" +
 			"Отправьте голосовое сообщение или напишите текстом.\n" +
-			"Например: <code>500 рублей на еду в Макдональдс</code>\n\n" +
-			"Используйте /cancel для отмены.",
-		ParseMode: models.ParseModeHTML,
+			"Например: <code>500 рублей на еду в Макдональдс</code>",
+		ParseMode:   models.ParseModeHTML,
+		ReplyMarkup: mainMenuKeyboard(),
 	})
 }
 
@@ -180,8 +217,9 @@ func (b *Bot) handleExpenseTextInput(ctx context.Context, botAPI *bot.Bot, chatI
 	if err != nil {
 		b.logger.Error(ctx, "failed to get categories", "err", err)
 		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID: chatID,
-			Text:   "Ошибка получения категорий.",
+			ChatID:      chatID,
+			Text:        "Ошибка получения категорий.",
+			ReplyMarkup: mainMenuKeyboard(),
 		})
 		return
 	}
@@ -199,8 +237,9 @@ func (b *Bot) handleExpenseTextInput(ctx context.Context, botAPI *bot.Bot, chatI
 	if err != nil {
 		b.logger.Error(ctx, "failed to parse expense", "err", err)
 		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID: chatID,
-			Text:   "Ошибка обработки текста.",
+			ChatID:      chatID,
+			Text:        "Ошибка обработки текста.",
+			ReplyMarkup: mainMenuKeyboard(),
 		})
 		return
 	}
@@ -208,8 +247,9 @@ func (b *Bot) handleExpenseTextInput(ctx context.Context, botAPI *bot.Bot, chatI
 	if len(expenses) == 0 {
 		b.logger.Print(ctx, "пользователь ввёл сообщение без расходов", "err", err)
 		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID: chatID,
-			Text:   "Не получилось получить расходы.",
+			ChatID:      chatID,
+			Text:        "Не получилось получить расходы.",
+			ReplyMarkup: mainMenuKeyboard(),
 		})
 		return
 	}
@@ -326,24 +366,15 @@ func (b *Bot) handleVoice(ctx context.Context, botAPI *bot.Bot, update *models.U
 	chatID := update.Message.Chat.ID
 	userID := update.Message.From.ID
 
-	// Check if user is in expense flow
-	stateData := b.stateManager.GetState(userID)
-	if stateData.State != StateAwaitingExpense {
-		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID: chatID,
-			Text:   "Сначала нажмите '➕ Add expense' чтобы начать добавление расхода.",
-		})
-		return
-	}
-
 	voiceFileID := update.Message.Voice.FileID
 	b.logger.Print(ctx, "received voice message", "file_id", voiceFileID)
 	tmpOgg, err := b.downloadTgFile(ctx, botAPI, voiceFileID)
 	if err != nil {
 		b.logger.Error(ctx, "failed to download voice file", "err", err)
 		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID: chatID,
-			Text:   "Ошибка получения голосового сообщения.",
+			ChatID:      chatID,
+			Text:        "Ошибка получения голосового сообщения.",
+			ReplyMarkup: mainMenuKeyboard(),
 		})
 		return
 	}
@@ -355,8 +386,9 @@ func (b *Bot) handleVoice(ctx context.Context, botAPI *bot.Bot, update *models.U
 	if err != nil {
 		b.logger.Error(ctx, "failed to transcribe voice", "err", err)
 		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID: chatID,
-			Text:   "Ошибка распознавания голоса.",
+			ChatID:      chatID,
+			Text:        "Ошибка распознавания голоса.",
+			ReplyMarkup: mainMenuKeyboard(),
 		})
 		return
 	}
@@ -365,13 +397,431 @@ func (b *Bot) handleVoice(ctx context.Context, botAPI *bot.Bot, update *models.U
 	b.handleExpenseTextInput(ctx, botAPI, chatID, userID, user, transcription)
 }
 
-// handleStatistics handles statistics request
-func (b *Bot) handleStatistics(ctx context.Context, botAPI *bot.Bot, chatID int64) {
+// handleStatistics shows statistics menu
+func (b *Bot) handleStatistics(ctx context.Context, botAPI *bot.Bot, chatID int64, userID int64, _ *User) {
+	stateData := b.stateManager.GetState(userID)
+	stateData.State = StateInStatsMenu
+	stateData.InStatsFlow = true
+	b.stateManager.SetStateData(userID, stateData)
+
 	_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID:    chatID,
-		Text:      "📊 <b>Статистика</b>\n\n<i>Функция в разработке...</i>",
+		ChatID:      chatID,
+		Text:        "📊 <b>Выберите тип статистики:</b>",
+		ParseMode:   models.ParseModeHTML,
+		ReplyMarkup: statisticsMenuKeyboard(),
+	})
+}
+
+// handleStatsTypeSelection handles statistics type selection from reply keyboard
+func (b *Bot) handleStatsTypeSelection(ctx context.Context, botAPI *bot.Bot, chatID int64, userID int64, statsType string) {
+	stateData := b.stateManager.GetState(userID)
+	stateData.State = StateInPeriodSelection
+	stateData.StatsType = statsType
+	stateData.InStatsFlow = true
+	b.stateManager.SetStateData(userID, stateData)
+
+	var text string
+	includeAllTime := false
+	if statsType == "categories" {
+		text = "📊 <b>Статистика по категориям</b>\n\nВыберите период:"
+		includeAllTime = true
+	} else {
+		text = "💸 <b>Статистика по тратам</b>\n\nВыберите период:"
+	}
+
+	_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID:      chatID,
+		Text:        text,
+		ParseMode:   models.ParseModeHTML,
+		ReplyMarkup: periodSelectionKeyboard(includeAllTime),
+	})
+}
+
+// handlePeriodSelection handles period selection from reply keyboard
+func (b *Bot) handlePeriodSelection(ctx context.Context, botAPI *bot.Bot, chatID int64, userID int64, user *User, stateData *UserStateData, periodType string) {
+	// Get period
+	var period TimePeriod
+	switch periodType {
+	case "today":
+		period = GetTodayPeriod()
+	case "week":
+		period = GetWeekPeriod()
+	case "month":
+		period = GetMonthPeriod()
+	case "alltime":
+		period = GetAllTimePeriod()
+	default:
+		return
+	}
+
+	statsType := stateData.StatsType
+
+	// Show statistics with appropriate keyboard
+	if statsType == "categories" {
+		b.handleStatisticsByCategories(ctx, botAPI, chatID, userID, user, period)
+	} else if statsType == "expenses" {
+		b.handleStatisticsByExpenses(ctx, botAPI, chatID, userID, user, period)
+	}
+}
+
+// handleCustomPeriodStart starts custom period input
+func (b *Bot) handleCustomPeriodStart(ctx context.Context, botAPI *bot.Bot, chatID int64, userID int64, stateData *UserStateData) {
+	stateData.State = StateAwaitingCustomPeriod
+	b.stateManager.SetStateData(userID, stateData)
+
+	_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID: chatID,
+		Text: "📅 <b>Введите кастомный период</b>\n\n" +
+			"Форматы:\n" +
+			"• <code>03.04.25 07.04.25</code>\n" +
+			"• <code>03.04.25 - 07.04.25</code>\n" +
+			"• <code>03.04 07.04</code> (текущий год)\n" +
+			"• <code>03.04 - 07.04</code> (текущий год)",
 		ParseMode: models.ParseModeHTML,
 	})
+}
+
+// handleBack handles back button navigation
+func (b *Bot) handleBack(ctx context.Context, botAPI *bot.Bot, chatID int64, userID int64, stateData *UserStateData) {
+	switch stateData.State {
+	case StateInPeriodSelection:
+		// Go back to stats menu
+		b.handleStatistics(ctx, botAPI, chatID, userID, nil)
+	case StateInStatsMenu:
+		// Go back to main menu
+		b.stateManager.ClearState(userID)
+		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID:      chatID,
+			Text:        "Главное меню:",
+			ReplyMarkup: mainMenuKeyboard(),
+		})
+	default:
+		// Default to main menu
+		b.stateManager.ClearState(userID)
+		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID:      chatID,
+			Text:        "Главное меню:",
+			ReplyMarkup: mainMenuKeyboard(),
+		})
+	}
+}
+
+// handleStatisticsByCategories handles statistics by categories request with period
+func (b *Bot) handleStatisticsByCategories(ctx context.Context, botAPI *bot.Bot, chatID int64, userID int64, user *User, period TimePeriod) {
+	// Get all expenses for user
+	expenses, err := b.saldo.GetUserExpenses(ctx, user.ID)
+	if err != nil {
+		b.logger.Error(ctx, "failed to get expenses", "err", err)
+		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID: chatID,
+			Text:   "Ошибка получения расходов.",
+		})
+		return
+	}
+
+	// Convert to telegram expenses
+	allExpenses := NewExpenses(expenses)
+
+	// Filter expenses by period
+	var tgExpenses []Expense
+	for _, exp := range allExpenses {
+		if exp.CreatedAt.After(period.Start) && exp.CreatedAt.Before(period.End) {
+			tgExpenses = append(tgExpenses, exp)
+		}
+	}
+
+	// Group expenses by category and currency
+	type CategoryStats struct {
+		Title   string
+		Emoji   string
+		Amounts map[string]int // currency -> amount in cents
+	}
+
+	categoryMap := make(map[string]*CategoryStats)
+
+	// Track currency frequency (count of occurrences)
+	currencyFrequency := make(map[string]int)
+
+	for _, exp := range tgExpenses {
+		var categoryKey, categoryTitle, emoji string
+
+		if exp.Category != nil {
+			categoryKey = exp.Category.Title
+			categoryTitle = exp.Category.Title
+			emoji = exp.Category.Emoji
+		} else {
+			categoryKey = "__no_category__"
+			categoryTitle = "Без категории"
+			emoji = "❓"
+		}
+
+		// Initialize category if not exists
+		if _, exists := categoryMap[categoryKey]; !exists {
+			categoryMap[categoryKey] = &CategoryStats{
+				Title:   categoryTitle,
+				Emoji:   emoji,
+				Amounts: make(map[string]int),
+			}
+		}
+
+		// Track currency frequency
+		currencyFrequency[exp.Currency]++
+
+		// Add amount to category
+		categoryMap[categoryKey].Amounts[exp.Currency] += exp.Amount
+	}
+
+	// Sort currencies by frequency (most frequent first)
+	type currencyWithFreq struct {
+		currency  string
+		frequency int
+	}
+	currenciesWithFreq := make([]currencyWithFreq, 0, len(currencyFrequency))
+	for currency, freq := range currencyFrequency {
+		currenciesWithFreq = append(currenciesWithFreq, currencyWithFreq{currency, freq})
+	}
+	sort.Slice(currenciesWithFreq, func(i, j int) bool {
+		return currenciesWithFreq[i].frequency > currenciesWithFreq[j].frequency
+	})
+
+	// Extract sorted currency order
+	currencyOrder := make([]string, len(currenciesWithFreq))
+	for i, cf := range currenciesWithFreq {
+		currencyOrder[i] = cf.currency
+	}
+
+	// Format statistics message
+	if len(categoryMap) == 0 {
+		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID:    chatID,
+			Text:      "📊 <b>Статистика</b>\n\n<i>Пока нет расходов.</i>",
+			ParseMode: models.ParseModeHTML,
+		})
+		return
+	}
+
+	// Sort categories by total amount (USD=EUR=RUB*100)
+	type categoryWithTotal struct {
+		stats *CategoryStats
+		total int // normalized to cents
+	}
+	categoriesWithTotal := make([]categoryWithTotal, 0, len(categoryMap))
+	for _, stats := range categoryMap {
+		total := 0
+		for currency, amountCents := range stats.Amounts {
+			// Normalize: RUB*100, USD=EUR=cents
+			currUpper := strings.ToUpper(currency)
+			if currUpper == "RUB" || currUpper == "RUR" {
+				total += amountCents * 100
+			} else {
+				total += amountCents
+			}
+		}
+		categoriesWithTotal = append(categoriesWithTotal, categoryWithTotal{stats, total})
+	}
+	sort.Slice(categoriesWithTotal, func(i, j int) bool {
+		return categoriesWithTotal[i].total > categoriesWithTotal[j].total
+	})
+
+	text := "📊 <b>Статистика по категориям:</b>\n"
+	text += fmt.Sprintf("<i>%s</i>\n\n", FormatPeriod(period))
+
+	// Format each category (sorted by total)
+	for _, cat := range categoriesWithTotal {
+		stats := cat.stats
+		text += fmt.Sprintf("%s <b>%s:</b> ", stats.Emoji, stats.Title)
+
+		// Format amounts by currency in order of frequency
+		first := true
+		for _, currency := range currencyOrder {
+			// Only show currencies that exist in this category
+			amountCents, exists := stats.Amounts[currency]
+			if !exists {
+				continue
+			}
+
+			if !first {
+				text += "/"
+			}
+			first = false
+
+			// Convert cents to main units
+			amount := float64(amountCents) / 100.0
+
+			// Get currency symbol
+			currencySymbol := getCurrencySymbol(currency)
+			text += fmt.Sprintf("%.2f%s", amount, currencySymbol)
+		}
+
+		text += "\n"
+	}
+
+	// Update state to stats menu after showing results
+	stateData := b.stateManager.GetState(userID)
+	stateData.State = StateInStatsMenu
+	stateData.InStatsFlow = true
+	b.stateManager.SetStateData(userID, stateData)
+
+	_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID:      chatID,
+		Text:        text,
+		ParseMode:   models.ParseModeHTML,
+		ReplyMarkup: statisticsMenuKeyboard(),
+	})
+}
+
+// getCurrencySymbol returns the symbol for a currency code
+func getCurrencySymbol(currency string) string {
+	switch strings.ToUpper(currency) {
+	case "RUB":
+		return "₽"
+	case "USD":
+		return "$"
+	case "EUR":
+		return "€"
+	default:
+		return currency
+	}
+}
+
+// handleStatisticsByExpenses handles statistics by individual expenses with period
+func (b *Bot) handleStatisticsByExpenses(ctx context.Context, botAPI *bot.Bot, chatID int64, userID int64, user *User, period TimePeriod) {
+	// Get all expenses for user
+	expenses, err := b.saldo.GetUserExpenses(ctx, user.ID)
+	if err != nil {
+		b.logger.Error(ctx, "failed to get expenses", "err", err)
+		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID: chatID,
+			Text:   "Ошибка получения расходов.",
+		})
+		return
+	}
+
+	// Convert to telegram expenses
+	allExpenses := NewExpenses(expenses)
+
+	// Filter expenses by period
+	var tgExpenses []Expense
+	for _, exp := range allExpenses {
+		if exp.CreatedAt.After(period.Start) && exp.CreatedAt.Before(period.End) {
+			tgExpenses = append(tgExpenses, exp)
+		}
+	}
+
+	// Check if we're in stats flow (from stats menu) or from main menu (week expenses)
+	stateData := b.stateManager.GetState(userID)
+	var replyMarkup models.ReplyMarkup
+
+	if stateData.InStatsFlow {
+		// User came from stats menu, show statistics menu
+		replyMarkup = statisticsMenuKeyboard()
+		// Update state to stats menu after showing results
+		stateData.State = StateInStatsMenu
+		b.stateManager.SetStateData(userID, stateData)
+	} else {
+		// User came from main menu (week expenses), keep main menu
+		replyMarkup = mainMenuKeyboard()
+		// Clear state to ensure back button goes to main menu
+		b.stateManager.ClearState(userID)
+	}
+
+	if len(tgExpenses) == 0 {
+		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID:      chatID,
+			Text:        fmt.Sprintf("📊 <b>Статистика по тратам:</b>\n<i>%s</i>\n\n<i>Нет расходов за этот период.</i>", FormatPeriod(period)),
+			ParseMode:   models.ParseModeHTML,
+			ReplyMarkup: replyMarkup,
+		})
+		return
+	}
+
+	// Sort by date (newest first)
+	sort.Slice(tgExpenses, func(i, j int) bool {
+		return tgExpenses[i].CreatedAt.After(tgExpenses[j].CreatedAt)
+	})
+
+	text := "📊 <b>Статистика по тратам:</b>\n"
+	text += fmt.Sprintf("<i>%s</i>\n\n", FormatPeriod(period))
+
+	// Format each expense
+	for _, exp := range tgExpenses {
+		// Format: Description(Category): Amount (Date) or Category: Amount (Date) if no description
+		categoryName := "Без категории"
+		emoji := "❓"
+		if exp.Category != nil {
+			categoryName = exp.Category.Title
+			emoji = exp.Category.Emoji
+		}
+
+		amount := float64(exp.Amount) / 100.0
+		currencySymbol := getCurrencySymbol(exp.Currency)
+		dateStr := FormatDate(exp.CreatedAt)
+
+		if exp.Description != "" {
+			// Capitalize first letter of description
+			description := exp.Description
+			if len(description) > 0 {
+				runes := []rune(description)
+				runes[0] = []rune(strings.ToUpper(string(runes[0])))[0]
+				description = string(runes)
+			}
+			text += fmt.Sprintf("<b>%s</b> (%s%s): %.2f%s (%s)\n",
+				description, emoji, categoryName, amount, currencySymbol, dateStr)
+		} else {
+			text += fmt.Sprintf("<b>%s%s</b>: %.2f%s (%s)\n",
+				emoji, categoryName, amount, currencySymbol, dateStr)
+		}
+	}
+
+	_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID:      chatID,
+		Text:        text,
+		ParseMode:   models.ParseModeHTML,
+		ReplyMarkup: replyMarkup,
+	})
+}
+
+// handleCustomPeriodInput handles custom period input from user
+func (b *Bot) handleCustomPeriodInput(ctx context.Context, botAPI *bot.Bot, chatID int64, userID int64, user *User, text string) {
+	// Parse custom period
+	period, err := ParseCustomPeriod(text)
+	if err != nil {
+		// Keep period selection menu on error
+		stateData := b.stateManager.GetState(userID)
+		includeAllTime := stateData.StatsType == "categories"
+
+		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID:      chatID,
+			Text:        fmt.Sprintf("❌ Ошибка: %v\n\nПожалуйста, введите период в формате:\n• ДД.ММ.ГГ ДД.ММ.ГГ\n• ДД.ММ - ДД.ММ (текущий год)", err),
+			ReplyMarkup: periodSelectionKeyboard(includeAllTime),
+		})
+		return
+	}
+
+	// Get state to know which stats type was requested
+	stateData := b.stateManager.GetState(userID)
+	statsType := stateData.StatsType
+
+	// For expenses, check max period is 1 month
+	if statsType == "expenses" && period.DaysBetween() > 31 {
+		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID:      chatID,
+			Text:        "❌ Для статистики по тратам период не может быть больше месяца (31 день).",
+			ReplyMarkup: periodSelectionKeyboard(false), // expenses don't have all-time
+		})
+		return
+	}
+
+	// Keep InStatsFlow flag to show stats menu after results
+	stateData.State = StateInStatsMenu
+	b.stateManager.SetStateData(userID, stateData)
+
+	// Show statistics
+	if statsType == "categories" {
+		b.handleStatisticsByCategories(ctx, botAPI, chatID, userID, user, period)
+	} else {
+		b.handleStatisticsByExpenses(ctx, botAPI, chatID, userID, user, period)
+	}
 }
 
 // handleCallback handles callback queries from inline keyboards
@@ -433,6 +883,7 @@ func (b *Bot) handleExpenseAction(ctx context.Context, botAPI *bot.Bot, callback
 		_, _ = botAPI.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
 			CallbackQueryID: callback.ID,
 		})
+
 		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID:      chatID,
 			Text:        "Отменено.",

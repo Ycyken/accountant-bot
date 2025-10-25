@@ -8,14 +8,19 @@ import (
 type UserState string
 
 const (
-	StateIdle            UserState = "idle"
-	StateAwaitingExpense UserState = "awaiting_expense"
+	StateIdle                 UserState = "idle"
+	StateAwaitingExpense      UserState = "awaiting_expense"
+	StateAwaitingCustomPeriod UserState = "awaiting_custom_period"
+	StateInStatsMenu          UserState = "in_stats_menu"
+	StateInPeriodSelection    UserState = "in_period_selection"
 )
 
 // UserStateData holds temporary data for user's current operation
 type UserStateData struct {
 	State        UserState
 	ExpensesData []ExpenseData
+	StatsType    string // "categories" or "expenses"
+	InStatsFlow  bool   // indicates if user is in statistics flow
 }
 
 // ExpenseData holds parsed expense information
@@ -76,4 +81,22 @@ func (sm *StateManager) ClearState(telegramUserID int64) {
 	defer sm.mu.Unlock()
 
 	delete(sm.states, telegramUserID)
+}
+
+// GetCurrentKeyboard returns appropriate keyboard based on current state
+func (sm *StateManager) GetCurrentKeyboard(telegramUserID int64) interface{} {
+	state := sm.GetState(telegramUserID)
+
+	switch state.State {
+	case StateInStatsMenu:
+		return statisticsMenuKeyboard()
+	case StateInPeriodSelection:
+		includeAllTime := state.StatsType == "categories"
+		return periodSelectionKeyboard(includeAllTime)
+	case StateAwaitingCustomPeriod:
+		includeAllTime := state.StatsType == "categories"
+		return periodSelectionKeyboard(includeAllTime)
+	default:
+		return mainMenuKeyboard()
+	}
 }

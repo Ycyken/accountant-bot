@@ -15,6 +15,9 @@ func mainMenuKeyboard() models.ReplyMarkup {
 				{Text: "📂 Add category"},
 				{Text: "📊 Statistics"},
 			},
+			{
+				{Text: "💰 Траты за неделю"},
+			},
 		},
 		ResizeKeyboard:  true,
 		OneTimeKeyboard: false,
@@ -70,3 +73,57 @@ func expenseConfirmKeyboard() models.ReplyMarkup {
 		},
 	}
 }
+
+// statisticsMenuKeyboard returns statistics type selection menu
+func statisticsMenuKeyboard() models.ReplyMarkup {
+	return &models.ReplyKeyboardMarkup{
+		Keyboard: [][]models.KeyboardButton{
+			{
+				{Text: "📊 По категориям"},
+				{Text: "💸 По тратам"},
+			},
+			{
+				{Text: "🔙 Назад"},
+			},
+		},
+		ResizeKeyboard:  true,
+		OneTimeKeyboard: false,
+	}
+}
+
+// periodSelectionKeyboard returns period selection menu
+func periodSelectionKeyboard(includeAllTime bool) models.ReplyMarkup {
+	buttons := [][]models.KeyboardButton{
+		{
+			{Text: "📅 За сегодня"},
+			{Text: "📅 За неделю"},
+		},
+	}
+
+	if includeAllTime {
+		buttons = append(buttons, []models.KeyboardButton{
+			{Text: "📅 За месяц"},
+			{Text: "📅 За всё время"},
+		})
+	} else {
+		buttons = append(buttons, []models.KeyboardButton{
+			{Text: "📅 За месяц"},
+		})
+	}
+
+	buttons = append(buttons, []models.KeyboardButton{
+		{Text: "📅 Кастомный период"},
+	})
+
+	buttons = append(buttons, []models.KeyboardButton{
+		{Text: "🔙 Назад"},
+	})
+
+	return &models.ReplyKeyboardMarkup{
+		Keyboard:        buttons,
+		ResizeKeyboard:  true,
+		OneTimeKeyboard: false,
+	}
+}
+
+// backToStatsKeyboard returns keyboard with back to stats button - removed, using statisticsMenuKeyboard instead

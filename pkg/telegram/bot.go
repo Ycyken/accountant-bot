@@ -87,13 +87,11 @@ func (b *Bot) registerHandlers() {
 	// Command handlers
 	b.api.RegisterHandler(bot.HandlerTypeMessageText, "/start", bot.MatchTypeExact, b.handleStart)
 	b.api.RegisterHandler(bot.HandlerTypeMessageText, "/help", bot.MatchTypeExact, b.handleHelp)
-	b.api.RegisterHandler(bot.HandlerTypeMessageText, "/cancel", bot.MatchTypeExact, b.handleCancel)
 
 	// Callback query handler for inline keyboards
 	b.api.RegisterHandler(bot.HandlerTypeCallbackQueryData, "", bot.MatchTypePrefix, b.handleCallback)
 
 	// Text message handler (for state-based conversations and keyboard buttons)
-	// This will also handle voice messages
 	b.api.RegisterHandler(bot.HandlerTypeMessageText, "", bot.MatchTypePrefix, b.handleMessage)
 }
 
