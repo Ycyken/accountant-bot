@@ -48,14 +48,15 @@ func New(ctx context.Context, cfg Config, saldoService *saldo.Manager, logger em
 		return nil, fmt.Errorf("failed to create bot: %w", err)
 	}
 
+	groq := saldo.NewGroq(cfg.GroqToken)
 	b := &Bot{
 		api:          api,
 		logger:       logger,
 		saldo:        saldoService,
 		debug:        cfg.Debug,
 		stateManager: NewStateManager(),
-		transcriber:  saldo.NewLocalWhisper(),
-		llm:          saldo.NewGroq(cfg.GroqToken),
+		transcriber:  groq,
+		llm:          groq,
 	}
 
 	// Register command handlers
