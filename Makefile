@@ -140,7 +140,7 @@ mfd-vt-template: --check-ns type-script-client
 type-script-client: generate
 	@go run $(GOFLAGS) $(MAIN) -config=cfg/local.toml -ts_client > ../gold-vt/src/services/api/factory.ts
 
-deploy: models
+deploy:
 	sh deployments/env_from_toml.sh
 	docker compose -f deployments/docker-compose.yml up -d --build
 
