@@ -85,12 +85,4 @@ var (
 			Buckets: []float64{0.5, 1.5, 2.5, 3.5},
 		},
 	)
-
-	// Gauge для количества активных пользователей
-	activeUsers = promauto.NewGauge(
-		prometheus.GaugeOpts{
-			Name: "telegram_active_users",
-			Help: "Number of active users (last 24h)",
-		},
-	)
 )
