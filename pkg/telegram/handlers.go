@@ -136,6 +136,14 @@ func (b *Bot) handleMessage(ctx context.Context, botAPI *bot.Bot, update *models
 		buttonsPressed.WithLabelValues("add_expense").Inc()
 		b.handleAddExpenseStart(ctx, botAPI, chatID, userID)
 		return
+	case "📂 Add category":
+		buttonsPressed.WithLabelValues("add_category").Inc()
+		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID:      chatID,
+			Text:        "⚠️ Кастомные категории ещё не реализованы.",
+			ReplyMarkup: mainMenuKeyboard(),
+		})
+		return
 	case "📊 Statistics":
 		buttonsPressed.WithLabelValues("statistics").Inc()
 		b.handleStatistics(ctx, botAPI, chatID, userID, dbUser)
