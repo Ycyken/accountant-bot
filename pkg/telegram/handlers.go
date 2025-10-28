@@ -67,13 +67,13 @@ func (b *Bot) handleHelp(ctx context.Context, botAPI *bot.Bot, update *models.Up
 
 	helpText := `📚 <b>Справка по командам:</b>
 
-<b>➕ Add expense</b> - Добавить новый расход
+<b>➕ Добавить расход</b> - Добавить новый расход
 Нажмите кнопку и отправьте голосовое сообщение или текст с описанием расхода.
 
-<b>📂 Add category</b> - Добавить категорию
+<b>📂 Добавить категорию</b> - Добавить категорию
 Создайте новую категорию расходов с эмодзи.
 
-<b>📊 Statistics</b> - Статистика
+<b>📊 Статистика</b> - Статистика
 Показывает распределение расходов по категориям.
 
 💡 <i>Совет:</i> Используйте кнопки меню для быстрого доступа к функциям.`
@@ -132,11 +132,11 @@ func (b *Bot) handleMessage(ctx context.Context, botAPI *bot.Bot, update *models
 
 	// Handle keyboard buttons
 	switch text {
-	case "➕ Add expense":
+	case "➕ Добавить расход":
 		buttonsPressed.WithLabelValues("add_expense").Inc()
 		b.handleAddExpenseStart(ctx, botAPI, chatID, userID)
 		return
-	case "📂 Add category":
+	case "📂 Добавить категорию":
 		buttonsPressed.WithLabelValues("add_category").Inc()
 		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID:      chatID,
@@ -144,7 +144,7 @@ func (b *Bot) handleMessage(ctx context.Context, botAPI *bot.Bot, update *models
 			ReplyMarkup: mainMenuKeyboard(),
 		})
 		return
-	case "📊 Statistics":
+	case "📊 Статистика":
 		buttonsPressed.WithLabelValues("statistics").Inc()
 		b.handleStatistics(ctx, botAPI, chatID, userID, dbUser)
 		return

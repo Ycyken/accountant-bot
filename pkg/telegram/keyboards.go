@@ -9,11 +9,11 @@ func mainMenuKeyboard() models.ReplyMarkup {
 	return &models.ReplyKeyboardMarkup{
 		Keyboard: [][]models.KeyboardButton{
 			{
-				{Text: "➕ Add expense"},
+				{Text: "➕ Добавить расход"},
 			},
 			{
-				{Text: "📂 Add category"},
-				{Text: "📊 Statistics"},
+				{Text: "📂 Добавить категорию"},
+				{Text: "📊 Статистика"},
 			},
 			{
 				{Text: "💰 Траты за неделю"},
