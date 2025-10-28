@@ -78,12 +78,12 @@ func ParseCustomPeriod(input string) (TimePeriod, error) {
 
 	start, err := parseDate(strings.TrimSpace(parts[0]))
 	if err != nil {
-		return TimePeriod{}, fmt.Errorf("ошибка в начальной дате: %v", err)
+		return TimePeriod{}, fmt.Errorf("ошибка в начальной дате: %w", err)
 	}
 
 	end, err := parseDate(strings.TrimSpace(parts[1]))
 	if err != nil {
-		return TimePeriod{}, fmt.Errorf("ошибка в конечной дате: %v", err)
+		return TimePeriod{}, fmt.Errorf("ошибка в конечной дате: %w", err)
 	}
 
 	// Set time to start of day for start date and end of day for end date
