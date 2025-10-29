@@ -62,6 +62,12 @@ func New(ctx context.Context, cfg Config, saldoService *saldo.Manager, logger em
 	// Register command handlers
 	b.registerHandlers()
 
+	// Initialize metrics from database
+	if err := b.initializeMetrics(ctx); err != nil {
+		logger.Error(ctx, "failed to initialize metrics", "err", err)
+		// Don't fail bot startup if metrics init fails
+	}
+
 	return b, nil
 }
 
@@ -81,6 +87,33 @@ func (b *Bot) Start(ctx context.Context) error {
 // Stop gracefully stops the bot
 func (b *Bot) Stop(ctx context.Context) {
 	b.logger.Print(ctx, "stopping telegram bot")
+}
+
+// initializeMetrics initializes Prometheus metrics from database
+// This ensures metrics persist across bot restarts
+func (b *Bot) initializeMetrics(ctx context.Context) error {
+	// Get total expenses count from DB
+	expenses, err := b.saldo.GetAllExpenses(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get expenses count: %w", err)
+	}
+
+	// Get total categories count from DB
+	categories, err := b.saldo.GetAllCategories(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get categories count: %w", err)
+	}
+
+	// Initialize counters with database values
+	// Use Add() to set initial values
+	expensesCreated.Add(float64(len(expenses)))
+	categoriesCreated.Add(float64(len(categories)))
+
+	b.logger.Print(ctx, "metrics initialized from database",
+		"expenses", len(expenses),
+		"categories", len(categories))
+
+	return nil
 }
 
 // registerHandlers registers all command handlers

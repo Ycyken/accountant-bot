@@ -16,14 +16,14 @@
             },
             "targets": [
                 {
-                    "expr": "telegram_commands_processed_total",
+                    "expr": "increase(telegram_commands_processed_total[5m])",
                     "legendFormat": "{{command}}"
                 }
             ],
             "yaxes": [
                 {
                     "format": "short",
-                    "label": "Count"
+                    "label": "Count (5m window)"
                 },
                 {
                     "show": false
@@ -41,14 +41,14 @@
             },
             "targets": [
                 {
-                    "expr": "telegram_messages_processed_total",
+                    "expr": "increase(telegram_messages_processed_total[5m])",
                     "legendFormat": "{{type}}"
                 }
             ],
             "yaxes": [
                 {
                     "format": "short",
-                    "label": "Count"
+                    "label": "Count (5m window)"
                 },
                 {
                     "show": false
@@ -66,14 +66,14 @@
             },
             "targets": [
                 {
-                    "expr": "telegram_buttons_pressed_total",
+                    "expr": "increase(telegram_buttons_pressed_total[5m])",
                     "legendFormat": "{{button}}"
                 }
             ],
             "yaxes": [
                 {
                     "format": "short",
-                    "label": "Count"
+                    "label": "Count (5m window)"
                 },
                 {
                     "show": false
@@ -91,19 +91,69 @@
             },
             "targets": [
                 {
-                    "expr": "telegram_callbacks_processed_total",
+                    "expr": "increase(telegram_callbacks_processed_total[5m])",
                     "legendFormat": "{{action}}"
                 }
             ],
             "yaxes": [
                 {
                     "format": "short",
-                    "label": "Count"
+                    "label": "Count (5m window)"
                 },
                 {
                     "show": false
                 }
             ]
+        },
+        {
+            "title": "Total Commands & Messages",
+            "type": "stat",
+            "gridPos": {
+                "h": 4,
+                "w": 12,
+                "x": 0,
+                "y": 16
+            },
+            "targets": [
+                {
+                    "expr": "sum(telegram_commands_processed_total)",
+                    "legendFormat": "Commands"
+                },
+                {
+                    "expr": "sum(telegram_messages_processed_total)",
+                    "legendFormat": "Messages"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short"
+                }
+            }
+        },
+        {
+            "title": "Total Buttons & Callbacks",
+            "type": "stat",
+            "gridPos": {
+                "h": 4,
+                "w": 12,
+                "x": 12,
+                "y": 16
+            },
+            "targets": [
+                {
+                    "expr": "sum(telegram_buttons_pressed_total)",
+                    "legendFormat": "Buttons"
+                },
+                {
+                    "expr": "sum(telegram_callbacks_processed_total)",
+                    "legendFormat": "Callbacks"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short"
+                }
+            }
         },
         {
             "title": "Total Expenses & Categories",
@@ -112,7 +162,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 0,
-                "y": 16
+                "y": 20
             },
             "targets": [
                 {
@@ -137,22 +187,22 @@
                 "h": 8,
                 "w": 12,
                 "x": 12,
-                "y": 16
+                "y": 20
             },
             "targets": [
                 {
-                    "expr": "telegram_expenses_created_total",
+                    "expr": "increase(telegram_expenses_created_total[5m])",
                     "legendFormat": "Expenses"
                 },
                 {
-                    "expr": "telegram_categories_created_total",
+                    "expr": "increase(telegram_categories_created_total[5m])",
                     "legendFormat": "Categories"
                 }
             ],
             "yaxes": [
                 {
                     "format": "short",
-                    "label": "Count"
+                    "label": "Count (5m window)"
                 },
                 {
                     "show": false
@@ -166,18 +216,18 @@
                 "h": 8,
                 "w": 12,
                 "x": 0,
-                "y": 24
+                "y": 28
             },
             "targets": [
                 {
-                    "expr": "telegram_errors_total",
+                    "expr": "increase(telegram_errors_total[5m])",
                     "legendFormat": "{{type}}"
                 }
             ],
             "yaxes": [
                 {
                     "format": "short",
-                    "label": "Count"
+                    "label": "Count (5m window)"
                 },
                 {
                     "show": false
@@ -191,7 +241,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 12,
-                "y": 24
+                "y": 28
             },
             "targets": [
                 {
@@ -216,27 +266,19 @@
                 "h": 8,
                 "w": 12,
                 "x": 0,
-                "y": 32
+                "y": 36
             },
             "targets": [
                 {
-                    "expr": "telegram_llm_parse_duration_seconds_bucket{le=\"0.5\"}",
+                    "expr": "increase(telegram_llm_parse_duration_seconds_bucket{le=\"0.5\"}[5m])",
                     "legendFormat": "<= 0.5s"
                 },
                 {
-                    "expr": "telegram_llm_parse_duration_seconds_bucket{le=\"1\"}",
-                    "legendFormat": "<= 1s"
-                },
-                {
-                    "expr": "telegram_llm_parse_duration_seconds_bucket{le=\"2.5\"}",
+                    "expr": "increase(telegram_llm_parse_duration_seconds_bucket{le=\"2.5\"}[5m])",
                     "legendFormat": "<= 2.5s"
                 },
                 {
-                    "expr": "telegram_llm_parse_duration_seconds_bucket{le=\"5\"}",
-                    "legendFormat": "<= 5s"
-                },
-                {
-                    "expr": "telegram_llm_parse_duration_seconds_count",
+                    "expr": "increase(telegram_llm_parse_duration_seconds_count[5m])",
                     "legendFormat": "Total"
                 }
             ],
@@ -258,27 +300,15 @@
                 "h": 8,
                 "w": 12,
                 "x": 12,
-                "y": 32
+                "y": 36
             },
             "targets": [
                 {
-                    "expr": "telegram_transcription_duration_seconds_bucket{le=\"1\"}",
-                    "legendFormat": "<= 1s"
-                },
-                {
-                    "expr": "telegram_transcription_duration_seconds_bucket{le=\"2.5\"}",
+                    "expr": "increase(telegram_transcription_duration_seconds_bucket{le=\"2.5\"}[5m])",
                     "legendFormat": "<= 2.5s"
                 },
                 {
-                    "expr": "telegram_transcription_duration_seconds_bucket{le=\"5\"}",
-                    "legendFormat": "<= 5s"
-                },
-                {
-                    "expr": "telegram_transcription_duration_seconds_bucket{le=\"10\"}",
-                    "legendFormat": "<= 10s"
-                },
-                {
-                    "expr": "telegram_transcription_duration_seconds_count",
+                    "expr": "increase(telegram_transcription_duration_seconds_count[5m])",
                     "legendFormat": "Total"
                 }
             ],

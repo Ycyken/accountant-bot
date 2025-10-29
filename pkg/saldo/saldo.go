@@ -192,3 +192,23 @@ func (s *Manager) GetUserExpenses(ctx context.Context, userID int) ([]Expense, e
 
 	return NewExpenses(expenses), nil
 }
+
+// GetAllExpenses returns all expenses (for metrics initialization)
+func (s *Manager) GetAllExpenses(ctx context.Context) ([]Expense, error) {
+	expenses, err := s.cr.ExpensesByFilters(ctx, &db.ExpenseSearch{}, db.PagerDefault, s.cr.FullExpense())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get all expenses: %w", err)
+	}
+
+	return NewExpenses(expenses), nil
+}
+
+// GetAllCategories returns all categories (for metrics initialization)
+func (s *Manager) GetAllCategories(ctx context.Context) ([]Category, error) {
+	categories, err := s.cr.CategoriesByFilters(ctx, &db.CategorySearch{}, db.PagerDefault)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get all categories: %w", err)
+	}
+
+	return NewCategories(categories), nil
+}
