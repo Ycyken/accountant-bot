@@ -251,6 +251,7 @@ func (b *Bot) handleExpenseTextInput(ctx context.Context, botAPI *bot.Bot, chatI
 	startTime := time.Now()
 	expenses, err := b.llm.ParseExpenses(ctx, text, categoryNames)
 	llmParseDuration.Observe(time.Since(startTime).Seconds())
+	llmParsesTotal.Inc()
 
 	if err != nil {
 		errorsTotal.WithLabelValues("llm_parse").Inc()
@@ -425,6 +426,7 @@ func (b *Bot) handleVoice(ctx context.Context, botAPI *bot.Bot, update *models.U
 	startTime := time.Now()
 	transcription, err := b.transcriber.Transcribe(ctx, tmpOgg)
 	transcriptionDuration.Observe(time.Since(startTime).Seconds())
+	transcriptionsTotal.Inc()
 
 	b.logger.Print(ctx, "transcription result", "text", transcription)
 	if err != nil {

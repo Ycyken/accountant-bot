@@ -38,7 +38,7 @@ services:
     container_name: saldo-prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.retention.time=7d'
+      - '--storage.tsdb.retention.time=30d'
     ports:
       - "9090:9090"
     volumes:

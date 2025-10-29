@@ -245,11 +245,11 @@
             },
             "targets": [
                 {
-                    "expr": "telegram_llm_parse_duration_seconds_count",
+                    "expr": "telegram_llm_parses_total",
                     "legendFormat": "LLM Parses"
                 },
                 {
-                    "expr": "telegram_transcription_duration_seconds_count",
+                    "expr": "telegram_transcriptions_total",
                     "legendFormat": "Transcriptions"
                 }
             ],
