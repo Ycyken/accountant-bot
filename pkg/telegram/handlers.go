@@ -70,9 +70,6 @@ func (b *Bot) handleHelp(ctx context.Context, botAPI *bot.Bot, update *models.Up
 <b>➕ Добавить расход</b> - Добавить новый расход
 Нажмите кнопку и отправьте голосовое сообщение или текст с описанием расхода.
 
-<b>📂 Добавить категорию</b> - Добавить свою категорию расхода
-Создайте новую категорию расходов с эмодзи. (пока не реализовано)
-
 <b>📊 Статистика</b> - Статистика
 Показать распределение расходов по категориям или тратам.
 
@@ -192,14 +189,6 @@ func (b *Bot) handleKeyboardButton(ctx context.Context, botAPI *bot.Bot, chatID 
 	case "➕ Добавить расход":
 		buttonsPressed.WithLabelValues("add_expense").Inc()
 		b.handleAddExpenseStart(ctx, botAPI, chatID, userID)
-		return true
-	case "📂 Добавить категорию":
-		buttonsPressed.WithLabelValues("add_category").Inc()
-		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID:      chatID,
-			Text:        "⚠️ Кастомные категории ещё не реализованы.",
-			ReplyMarkup: mainMenuKeyboard(),
-		})
 		return true
 	case "📊 Статистика":
 		buttonsPressed.WithLabelValues("statistics").Inc()

@@ -10,9 +10,6 @@ func mainMenuKeyboard() models.ReplyMarkup {
 		Keyboard: [][]models.KeyboardButton{
 			{
 				{Text: "➕ Добавить расход"},
-			},
-			{
-				{Text: "📂 Добавить категорию"},
 				{Text: "📊 Статистика"},
 			},
 			{
