@@ -150,6 +150,41 @@ func (b *Bot) handleMessage(ctx context.Context, botAPI *bot.Bot, update *models
 	b.handleExpenseTextInput(ctx, botAPI, chatID, userID, dbUser, text)
 }
 
+func (b *Bot) handleStatisticsButton(ctx context.Context, botAPI *bot.Bot, chatID int64, userID int64, dbUser *User, text string, stateData *UserStateData) bool {
+	switch text {
+	case "📊 По категориям":
+		buttonsPressed.WithLabelValues("by_categories").Inc()
+		b.handleStatsTypeSelection(ctx, botAPI, chatID, userID, StatsByCategories)
+		return true
+	case "💸 По тратам":
+		buttonsPressed.WithLabelValues("by_expenses").Inc()
+		b.handleStatsTypeSelection(ctx, botAPI, chatID, userID, StatsByExpenses)
+		return true
+	case "📅 За сегодня":
+		buttonsPressed.WithLabelValues("period_today").Inc()
+		b.handlePeriodSelection(ctx, botAPI, chatID, userID, dbUser, stateData, "today")
+		return true
+	case "📅 За неделю":
+		buttonsPressed.WithLabelValues("period_week").Inc()
+		b.handlePeriodSelection(ctx, botAPI, chatID, userID, dbUser, stateData, "week")
+		return true
+	case "📅 За месяц":
+		buttonsPressed.WithLabelValues("period_month").Inc()
+		b.handlePeriodSelection(ctx, botAPI, chatID, userID, dbUser, stateData, "month")
+		return true
+	case "📅 За всё время":
+		buttonsPressed.WithLabelValues("period_alltime").Inc()
+		b.handlePeriodSelection(ctx, botAPI, chatID, userID, dbUser, stateData, "alltime")
+		return true
+	case "📅 Кастомный период":
+		buttonsPressed.WithLabelValues("period_custom").Inc()
+		b.handleCustomPeriodStart(ctx, botAPI, chatID, userID, stateData)
+		return true
+	default:
+		return false
+	}
+}
+
 // handleKeyboardButton handles keyboard button presses
 // Returns true if button was handled, false otherwise
 func (b *Bot) handleKeyboardButton(ctx context.Context, botAPI *bot.Bot, chatID int64, userID int64, dbUser *User, text string, stateData *UserStateData) bool {
@@ -179,38 +214,8 @@ func (b *Bot) handleKeyboardButton(ctx context.Context, botAPI *bot.Bot, chatID 
 		buttonsPressed.WithLabelValues("back").Inc()
 		b.handleBack(ctx, botAPI, chatID, userID, stateData)
 		return true
-	case "🔙 К статистике":
-		buttonsPressed.WithLabelValues("to_statistics").Inc()
-		b.handleStatistics(ctx, botAPI, chatID, userID, dbUser)
-		return true
-	case "📊 По категориям":
-		buttonsPressed.WithLabelValues("by_categories").Inc()
-		b.handleStatsTypeSelection(ctx, botAPI, chatID, userID, "categories")
-		return true
-	case "💸 По тратам":
-		buttonsPressed.WithLabelValues("by_expenses").Inc()
-		b.handleStatsTypeSelection(ctx, botAPI, chatID, userID, "expenses")
-		return true
-	case "📅 За сегодня":
-		buttonsPressed.WithLabelValues("period_today").Inc()
-		b.handlePeriodSelection(ctx, botAPI, chatID, userID, dbUser, stateData, "today")
-		return true
-	case "📅 За неделю":
-		buttonsPressed.WithLabelValues("period_week").Inc()
-		b.handlePeriodSelection(ctx, botAPI, chatID, userID, dbUser, stateData, "week")
-		return true
-	case "📅 За месяц":
-		buttonsPressed.WithLabelValues("period_month").Inc()
-		b.handlePeriodSelection(ctx, botAPI, chatID, userID, dbUser, stateData, "month")
-		return true
-	case "📅 За всё время":
-		buttonsPressed.WithLabelValues("period_alltime").Inc()
-		b.handlePeriodSelection(ctx, botAPI, chatID, userID, dbUser, stateData, "alltime")
-		return true
-	case "📅 Кастомный период":
-		buttonsPressed.WithLabelValues("period_custom").Inc()
-		b.handleCustomPeriodStart(ctx, botAPI, chatID, userID, stateData)
-		return true
+	case "📊 По категориям", "💸 По тратам", "📅 За сегодня", "📅 За неделю", "📅 За месяц", "📅 За всё время", "📅 Кастомный период":
+		return b.handleStatisticsButton(ctx, botAPI, chatID, userID, dbUser, text, stateData)
 	default:
 		return false
 	}
@@ -452,7 +457,6 @@ func (b *Bot) handleVoice(ctx context.Context, botAPI *bot.Bot, update *models.U
 func (b *Bot) handleStatistics(ctx context.Context, botAPI *bot.Bot, chatID int64, userID int64, _ *User) {
 	stateData := b.stateManager.GetState(userID)
 	stateData.State = StateInStatsMenu
-	stateData.InStatsFlow = true
 	b.stateManager.SetStateData(userID, stateData)
 
 	_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
@@ -464,16 +468,15 @@ func (b *Bot) handleStatistics(ctx context.Context, botAPI *bot.Bot, chatID int6
 }
 
 // handleStatsTypeSelection handles statistics type selection from reply keyboard
-func (b *Bot) handleStatsTypeSelection(ctx context.Context, botAPI *bot.Bot, chatID int64, userID int64, statsType string) {
+func (b *Bot) handleStatsTypeSelection(ctx context.Context, botAPI *bot.Bot, chatID int64, userID int64, statsType StatsType) {
 	stateData := b.stateManager.GetState(userID)
 	stateData.State = StateInPeriodSelection
 	stateData.StatsType = statsType
-	stateData.InStatsFlow = true
 	b.stateManager.SetStateData(userID, stateData)
 
 	var text string
 	includeAllTime := false
-	if statsType == "categories" {
+	if statsType == StatsByCategories {
 		text = "📊 <b>Статистика по категориям</b>\n\nВыберите период:"
 		includeAllTime = true
 	} else {
@@ -490,6 +493,12 @@ func (b *Bot) handleStatsTypeSelection(ctx context.Context, botAPI *bot.Bot, cha
 
 // handlePeriodSelection handles period selection from reply keyboard
 func (b *Bot) handlePeriodSelection(ctx context.Context, botAPI *bot.Bot, chatID int64, userID int64, user *User, stateData *UserStateData, periodType string) {
+	// If user was in custom period input state, return to period selection
+	if stateData.State == StateAwaitingCustomPeriod {
+		stateData.State = StateInPeriodSelection
+		b.stateManager.SetStateData(userID, stateData)
+	}
+
 	// Get period
 	var period TimePeriod
 	switch periodType {
@@ -508,10 +517,13 @@ func (b *Bot) handlePeriodSelection(ctx context.Context, botAPI *bot.Bot, chatID
 	statsType := stateData.StatsType
 
 	// Show statistics with appropriate keyboard
-	if statsType == "categories" {
+	switch statsType {
+	case StatsByCategories:
 		b.handleStatisticsByCategories(ctx, botAPI, chatID, userID, user, period)
-	} else if statsType == "expenses" {
+	case StatsByExpenses:
 		b.handleStatisticsByExpenses(ctx, botAPI, chatID, userID, user, period)
+	default:
+		return
 	}
 }
 
@@ -535,19 +547,9 @@ func (b *Bot) handleCustomPeriodStart(ctx context.Context, botAPI *bot.Bot, chat
 // handleBack handles back button navigation
 func (b *Bot) handleBack(ctx context.Context, botAPI *bot.Bot, chatID int64, userID int64, stateData *UserStateData) {
 	switch stateData.State {
-	case StateInPeriodSelection:
-		// Go back to stats menu
+	case StateInPeriodSelection, StateAwaitingCustomPeriod: // Go back to stats menu
 		b.handleStatistics(ctx, botAPI, chatID, userID, nil)
-	case StateInStatsMenu:
-		// Go back to main menu
-		b.stateManager.ClearState(userID)
-		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID:      chatID,
-			Text:        "Главное меню:",
-			ReplyMarkup: mainMenuKeyboard(),
-		})
 	default:
-		// Default to main menu
 		b.stateManager.ClearState(userID)
 		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID:      chatID,
@@ -588,12 +590,16 @@ func (b *Bot) handleStatisticsByCategories(ctx context.Context, botAPI *bot.Bot,
 	// Sort currencies by frequency (most frequent first)
 	currencyOrder := sortCurrenciesByFrequency(currencyFrequency)
 
+	// Get current keyboard based on state - don't change the state
+	replyMarkup := b.stateManager.GetCurrentKeyboard(userID)
+
 	// Format statistics message
 	if len(categoryMap) == 0 {
 		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID:    chatID,
-			Text:      "📊 <b>Статистика</b>\n\n<i>Пока нет расходов.</i>",
-			ParseMode: models.ParseModeHTML,
+			ChatID:      chatID,
+			Text:        "📊 <b>Статистика</b>\n\n<i>Пока нет расходов.</i>",
+			ParseMode:   models.ParseModeHTML,
+			ReplyMarkup: replyMarkup,
 		})
 		return
 	}
@@ -648,17 +654,11 @@ func (b *Bot) handleStatisticsByCategories(ctx context.Context, botAPI *bot.Bot,
 		text += "\n"
 	}
 
-	// Update state to stats menu after showing results
-	stateData := b.stateManager.GetState(userID)
-	stateData.State = StateInStatsMenu
-	stateData.InStatsFlow = true
-	b.stateManager.SetStateData(userID, stateData)
-
 	_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
 		ChatID:      chatID,
 		Text:        text,
 		ParseMode:   models.ParseModeHTML,
-		ReplyMarkup: statisticsMenuKeyboard(),
+		ReplyMarkup: replyMarkup,
 	})
 }
 
@@ -710,7 +710,7 @@ func getCurrencyRate(currency string) float64 {
 		"CNY": 10.0,
 		"RUB": 1.0,
 		"JPY": 0.5,
-		"KZT": 0.14, // ~1/7
+		"KZT": 0.14,
 	}
 
 	curr := strings.ToUpper(currency)
@@ -768,21 +768,8 @@ func groupExpensesByCategory(expenses []Expense) (map[string]*CategoryStats, map
 func calculateCategoryTotal(amounts map[string]int) int {
 	total := 0
 	for currency, amountCents := range amounts {
-		curr := strings.ToUpper(currency)
-		switch curr {
-		case "USD", "EUR", "GBP", "CHF":
-			total += amountCents * 100
-		case "GEL":
-			total += amountCents * 30
-		case "CNY":
-			total += amountCents * 10
-		case "JPY":
-			total += amountCents / 2
-		case "KZT":
-			total += amountCents / 7
-		default:
-			total += amountCents
-		}
+		rate := getCurrencyRate(currency)
+		total += int(float64(amountCents) * rate)
 	}
 	return total
 }
@@ -883,22 +870,8 @@ func (b *Bot) handleStatisticsByExpenses(ctx context.Context, botAPI *bot.Bot, c
 		}
 	}
 
-	// Check if we're in stats flow (from stats menu) or from main menu (week expenses)
-	stateData := b.stateManager.GetState(userID)
-	var replyMarkup models.ReplyMarkup
-
-	if stateData.InStatsFlow {
-		// User came from stats menu, show statistics menu
-		replyMarkup = statisticsMenuKeyboard()
-		// Update state to stats menu after showing results
-		stateData.State = StateInStatsMenu
-		b.stateManager.SetStateData(userID, stateData)
-	} else {
-		// User came from main menu (week expenses), keep main menu
-		replyMarkup = mainMenuKeyboard()
-		// Clear state to ensure back button goes to main menu
-		b.stateManager.ClearState(userID)
-	}
+	// Get current keyboard based on state - don't change the state
+	replyMarkup := b.stateManager.GetCurrentKeyboard(userID)
 
 	if len(tgExpenses) == 0 {
 		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
@@ -968,7 +941,7 @@ func (b *Bot) handleCustomPeriodInput(ctx context.Context, botAPI *bot.Bot, chat
 	if err != nil {
 		// Keep period selection menu on error
 		stateData := b.stateManager.GetState(userID)
-		includeAllTime := stateData.StatsType == "categories"
+		includeAllTime := stateData.StatsType == StatsByCategories
 
 		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID:      chatID,
@@ -983,7 +956,7 @@ func (b *Bot) handleCustomPeriodInput(ctx context.Context, botAPI *bot.Bot, chat
 	statsType := stateData.StatsType
 
 	// For expenses, check max period is 1 month
-	if statsType == "expenses" && period.DaysBetween() > 31 {
+	if statsType == StatsByExpenses && period.DaysBetween() > 31 {
 		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID:      chatID,
 			Text:        "❌ Для статистики по тратам период не может быть больше месяца (31 день).",
@@ -992,12 +965,12 @@ func (b *Bot) handleCustomPeriodInput(ctx context.Context, botAPI *bot.Bot, chat
 		return
 	}
 
-	// Keep InStatsFlow flag to show stats menu after results
-	stateData.State = StateInStatsMenu
+	// Return to period selection state after showing results
+	stateData.State = StateInPeriodSelection
 	b.stateManager.SetStateData(userID, stateData)
 
 	// Show statistics
-	if statsType == "categories" {
+	if statsType == StatsByCategories {
 		b.handleStatisticsByCategories(ctx, botAPI, chatID, userID, user, period)
 	} else {
 		b.handleStatisticsByExpenses(ctx, botAPI, chatID, userID, user, period)

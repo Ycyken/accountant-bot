@@ -59,21 +59,14 @@ func ParseCustomPeriod(input string) (TimePeriod, error) {
 
 	// Try to split by various separators
 	var parts []string
-	if strings.Contains(input, " - ") {
-		parts = strings.Split(input, " - ")
-	} else if strings.Contains(input, "-") {
+	if strings.Contains(input, "-") {
 		parts = strings.Split(input, "-")
-	} else if strings.Contains(input, " ") {
-		parts = strings.Fields(input)
-		if len(parts) > 2 {
-			return TimePeriod{}, errors.New("неверный формат даты")
-		}
 	} else {
-		return TimePeriod{}, errors.New("неверный формат даты")
+		parts = strings.Split(input, " ")
 	}
 
 	if len(parts) != 2 {
-		return TimePeriod{}, errors.New("укажите начальную и конечную дату")
+		return TimePeriod{}, errors.New("неверный формат даты")
 	}
 
 	start, err := parseDate(strings.TrimSpace(parts[0]))

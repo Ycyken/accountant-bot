@@ -15,12 +15,18 @@ const (
 	StateInPeriodSelection    UserState = "in_period_selection"
 )
 
+type StatsType string
+
+const (
+	StatsByCategories StatsType = "categories"
+	StatsByExpenses   StatsType = "expenses"
+)
+
 // UserStateData holds temporary data for user's current operation
 type UserStateData struct {
 	State        UserState
 	ExpensesData []ExpenseData
-	StatsType    string // "categories" or "expenses"
-	InStatsFlow  bool   // indicates if user is in statistics flow
+	StatsType    StatsType // "categories" or "expenses"
 }
 
 // ExpenseData holds parsed expense information
@@ -90,11 +96,8 @@ func (sm *StateManager) GetCurrentKeyboard(telegramUserID int64) interface{} {
 	switch state.State {
 	case StateInStatsMenu:
 		return statisticsMenuKeyboard()
-	case StateInPeriodSelection:
-		includeAllTime := state.StatsType == "categories"
-		return periodSelectionKeyboard(includeAllTime)
-	case StateAwaitingCustomPeriod:
-		includeAllTime := state.StatsType == "categories"
+	case StateInPeriodSelection, StateAwaitingCustomPeriod:
+		includeAllTime := state.StatsType == StatsByCategories
 		return periodSelectionKeyboard(includeAllTime)
 	default:
 		return mainMenuKeyboard()
