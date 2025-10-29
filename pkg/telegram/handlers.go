@@ -642,19 +642,26 @@ func (b *Bot) handleStatisticsByCategories(ctx context.Context, botAPI *bot.Bot,
 		return
 	}
 
-	// Sort categories by total amount (USD=EUR=RUB*100)
+	// Sort categories by total amount (with currency rate approximation)
 	type categoryWithTotal struct {
 		stats *CategoryStats
-		total int // normalized to cents
+		total int
 	}
 	categoriesWithTotal := make([]categoryWithTotal, 0, len(categoryMap))
 	for _, stats := range categoryMap {
 		total := 0
 		for currency, amountCents := range stats.Amounts {
-			// Normalize: RUB*100, USD=EUR=cents
-			currUpper := strings.ToUpper(currency)
-			if currUpper == "RUB" || currUpper == "RUR" {
+			curr := strings.ToUpper(currency)
+			if curr == "USD" || curr == "EUR" || curr == "GBP" || curr == "CHF" {
 				total += amountCents * 100
+			} else if curr == "GEL" {
+				total += amountCents * 30
+			} else if curr == "CNY" {
+				total += amountCents * 10
+			} else if curr == "JPY" {
+				total += amountCents / 2
+			} else if curr == "KZT" {
+				total += amountCents / 7
 			} else {
 				total += amountCents
 			}
@@ -721,6 +728,16 @@ func getCurrencySymbol(currency string) string {
 		return "$"
 	case "EUR":
 		return "€"
+	case "GEL":
+		return "₾"
+	case "GBP":
+		return "£"
+	case "JPY":
+		return "¥"
+	case "CNY":
+		return "¥"
+	case "CHF":
+		return "₣"
 	default:
 		return currency
 	}
