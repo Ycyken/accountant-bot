@@ -141,6 +141,10 @@ deploy:
 	sh deployments/env_from_toml.sh
 	docker compose -f deployments/docker-compose.yml up -d --build
 
+db-test:
+	@$(MAKE) --no-print-directory db PGDATABASE=${TEST_PGDATABASE}
+
+
 --check-ns:
 ifeq ($(NS),"NONE")
 	$(error "You need to set NS variable before run this command. For example: NS=common make $(MAKECMDGOALS) or: make $(MAKECMDGOALS) NS=common")
