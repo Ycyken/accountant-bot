@@ -97,6 +97,23 @@ func ParseCustomPeriod(input string) (TimePeriod, error) {
 	return TimePeriod{Start: start, End: end}, nil
 }
 
+// parseYear parses year from string or returns current year if empty
+func parseYear(yearStr string) int {
+	if yearStr == "" {
+		return time.Now().Year()
+	}
+
+	year, _ := strconv.Atoi(yearStr)
+	// Convert 2-digit year to 4-digit
+	if year < 100 {
+		if year < 50 {
+			return year + 2000
+		}
+		return year + 1900
+	}
+	return year
+}
+
 // parseDate parses date from string
 // Formats: "03.04.25", "03.04"
 func parseDate(s string) (time.Time, error) {
@@ -110,22 +127,7 @@ func parseDate(s string) (time.Time, error) {
 
 	day, _ := strconv.Atoi(matches[1])
 	month, _ := strconv.Atoi(matches[2])
-
-	var year int
-	if matches[3] == "" {
-		// No year provided, use current year
-		year = time.Now().Year()
-	} else {
-		year, _ = strconv.Atoi(matches[3])
-		// Convert 2-digit year to 4-digit
-		if year < 100 {
-			if year < 50 {
-				year += 2000
-			} else {
-				year += 1900
-			}
-		}
-	}
+	year := parseYear(matches[3])
 
 	// Validate date
 	if month < 1 || month > 12 {

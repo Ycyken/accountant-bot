@@ -131,63 +131,7 @@ func (b *Bot) handleMessage(ctx context.Context, botAPI *bot.Bot, update *models
 	}
 
 	// Handle keyboard buttons
-	switch text {
-	case "➕ Добавить расход":
-		buttonsPressed.WithLabelValues("add_expense").Inc()
-		b.handleAddExpenseStart(ctx, botAPI, chatID, userID)
-		return
-	case "📂 Добавить категорию":
-		buttonsPressed.WithLabelValues("add_category").Inc()
-		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID:      chatID,
-			Text:        "⚠️ Кастомные категории ещё не реализованы.",
-			ReplyMarkup: mainMenuKeyboard(),
-		})
-		return
-	case "📊 Статистика":
-		buttonsPressed.WithLabelValues("statistics").Inc()
-		b.handleStatistics(ctx, botAPI, chatID, userID, dbUser)
-		return
-	case "💰 Траты за неделю":
-		buttonsPressed.WithLabelValues("week_expenses").Inc()
-		period := GetWeekPeriod()
-		b.handleStatisticsByExpenses(ctx, botAPI, chatID, userID, dbUser, period)
-		return
-	case "🔙 Назад":
-		buttonsPressed.WithLabelValues("back").Inc()
-		b.handleBack(ctx, botAPI, chatID, userID, stateData)
-		return
-	case "🔙 К статистике":
-		buttonsPressed.WithLabelValues("to_statistics").Inc()
-		b.handleStatistics(ctx, botAPI, chatID, userID, dbUser)
-		return
-	case "📊 По категориям":
-		buttonsPressed.WithLabelValues("by_categories").Inc()
-		b.handleStatsTypeSelection(ctx, botAPI, chatID, userID, "categories")
-		return
-	case "💸 По тратам":
-		buttonsPressed.WithLabelValues("by_expenses").Inc()
-		b.handleStatsTypeSelection(ctx, botAPI, chatID, userID, "expenses")
-		return
-	case "📅 За сегодня":
-		buttonsPressed.WithLabelValues("period_today").Inc()
-		b.handlePeriodSelection(ctx, botAPI, chatID, userID, dbUser, stateData, "today")
-		return
-	case "📅 За неделю":
-		buttonsPressed.WithLabelValues("period_week").Inc()
-		b.handlePeriodSelection(ctx, botAPI, chatID, userID, dbUser, stateData, "week")
-		return
-	case "📅 За месяц":
-		buttonsPressed.WithLabelValues("period_month").Inc()
-		b.handlePeriodSelection(ctx, botAPI, chatID, userID, dbUser, stateData, "month")
-		return
-	case "📅 За всё время":
-		buttonsPressed.WithLabelValues("period_alltime").Inc()
-		b.handlePeriodSelection(ctx, botAPI, chatID, userID, dbUser, stateData, "alltime")
-		return
-	case "📅 Кастомный период":
-		buttonsPressed.WithLabelValues("period_custom").Inc()
-		b.handleCustomPeriodStart(ctx, botAPI, chatID, userID, stateData)
+	if b.handleKeyboardButton(ctx, botAPI, chatID, userID, dbUser, text, stateData) {
 		return
 	}
 
@@ -204,6 +148,72 @@ func (b *Bot) handleMessage(ctx context.Context, botAPI *bot.Bot, update *models
 
 	// Any other text message is treated as expense input
 	b.handleExpenseTextInput(ctx, botAPI, chatID, userID, dbUser, text)
+}
+
+// handleKeyboardButton handles keyboard button presses
+// Returns true if button was handled, false otherwise
+func (b *Bot) handleKeyboardButton(ctx context.Context, botAPI *bot.Bot, chatID int64, userID int64, dbUser *User, text string, stateData *UserStateData) bool {
+	switch text {
+	case "➕ Добавить расход":
+		buttonsPressed.WithLabelValues("add_expense").Inc()
+		b.handleAddExpenseStart(ctx, botAPI, chatID, userID)
+		return true
+	case "📂 Добавить категорию":
+		buttonsPressed.WithLabelValues("add_category").Inc()
+		_, _ = botAPI.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID:      chatID,
+			Text:        "⚠️ Кастомные категории ещё не реализованы.",
+			ReplyMarkup: mainMenuKeyboard(),
+		})
+		return true
+	case "📊 Статистика":
+		buttonsPressed.WithLabelValues("statistics").Inc()
+		b.handleStatistics(ctx, botAPI, chatID, userID, dbUser)
+		return true
+	case "💰 Траты за неделю":
+		buttonsPressed.WithLabelValues("week_expenses").Inc()
+		period := GetWeekPeriod()
+		b.handleStatisticsByExpenses(ctx, botAPI, chatID, userID, dbUser, period)
+		return true
+	case "🔙 Назад":
+		buttonsPressed.WithLabelValues("back").Inc()
+		b.handleBack(ctx, botAPI, chatID, userID, stateData)
+		return true
+	case "🔙 К статистике":
+		buttonsPressed.WithLabelValues("to_statistics").Inc()
+		b.handleStatistics(ctx, botAPI, chatID, userID, dbUser)
+		return true
+	case "📊 По категориям":
+		buttonsPressed.WithLabelValues("by_categories").Inc()
+		b.handleStatsTypeSelection(ctx, botAPI, chatID, userID, "categories")
+		return true
+	case "💸 По тратам":
+		buttonsPressed.WithLabelValues("by_expenses").Inc()
+		b.handleStatsTypeSelection(ctx, botAPI, chatID, userID, "expenses")
+		return true
+	case "📅 За сегодня":
+		buttonsPressed.WithLabelValues("period_today").Inc()
+		b.handlePeriodSelection(ctx, botAPI, chatID, userID, dbUser, stateData, "today")
+		return true
+	case "📅 За неделю":
+		buttonsPressed.WithLabelValues("period_week").Inc()
+		b.handlePeriodSelection(ctx, botAPI, chatID, userID, dbUser, stateData, "week")
+		return true
+	case "📅 За месяц":
+		buttonsPressed.WithLabelValues("period_month").Inc()
+		b.handlePeriodSelection(ctx, botAPI, chatID, userID, dbUser, stateData, "month")
+		return true
+	case "📅 За всё время":
+		buttonsPressed.WithLabelValues("period_alltime").Inc()
+		b.handlePeriodSelection(ctx, botAPI, chatID, userID, dbUser, stateData, "alltime")
+		return true
+	case "📅 Кастомный период":
+		buttonsPressed.WithLabelValues("period_custom").Inc()
+		b.handleCustomPeriodStart(ctx, botAPI, chatID, userID, stateData)
+		return true
+	default:
+		return false
+	}
 }
 
 // handleAddExpenseStart starts the add expense flow
@@ -573,64 +583,10 @@ func (b *Bot) handleStatisticsByCategories(ctx context.Context, botAPI *bot.Bot,
 	}
 
 	// Group expenses by category and currency
-	type CategoryStats struct {
-		Title   string
-		Emoji   string
-		Amounts map[string]int // currency -> amount in cents
-	}
-
-	categoryMap := make(map[string]*CategoryStats)
-
-	// Track currency frequency (count of occurrences)
-	currencyFrequency := make(map[string]int)
-
-	for _, exp := range tgExpenses {
-		var categoryKey, categoryTitle, emoji string
-
-		if exp.Category != nil {
-			categoryKey = exp.Category.Title
-			categoryTitle = exp.Category.Title
-			emoji = exp.Category.Emoji
-		} else {
-			categoryKey = "__no_category__"
-			categoryTitle = "Без категории"
-			emoji = "❓"
-		}
-
-		// Initialize category if not exists
-		if _, exists := categoryMap[categoryKey]; !exists {
-			categoryMap[categoryKey] = &CategoryStats{
-				Title:   categoryTitle,
-				Emoji:   emoji,
-				Amounts: make(map[string]int),
-			}
-		}
-
-		// Track currency frequency
-		currencyFrequency[exp.Currency]++
-
-		// Add amount to category
-		categoryMap[categoryKey].Amounts[exp.Currency] += exp.Amount
-	}
+	categoryMap, currencyFrequency := groupExpensesByCategory(tgExpenses)
 
 	// Sort currencies by frequency (most frequent first)
-	type currencyWithFreq struct {
-		currency  string
-		frequency int
-	}
-	currenciesWithFreq := make([]currencyWithFreq, 0, len(currencyFrequency))
-	for currency, freq := range currencyFrequency {
-		currenciesWithFreq = append(currenciesWithFreq, currencyWithFreq{currency, freq})
-	}
-	sort.Slice(currenciesWithFreq, func(i, j int) bool {
-		return currenciesWithFreq[i].frequency > currenciesWithFreq[j].frequency
-	})
-
-	// Extract sorted currency order
-	currencyOrder := make([]string, len(currenciesWithFreq))
-	for i, cf := range currenciesWithFreq {
-		currencyOrder[i] = cf.currency
-	}
+	currencyOrder := sortCurrenciesByFrequency(currencyFrequency)
 
 	// Format statistics message
 	if len(categoryMap) == 0 {
@@ -649,23 +605,7 @@ func (b *Bot) handleStatisticsByCategories(ctx context.Context, botAPI *bot.Bot,
 	}
 	categoriesWithTotal := make([]categoryWithTotal, 0, len(categoryMap))
 	for _, stats := range categoryMap {
-		total := 0
-		for currency, amountCents := range stats.Amounts {
-			curr := strings.ToUpper(currency)
-			if curr == "USD" || curr == "EUR" || curr == "GBP" || curr == "CHF" {
-				total += amountCents * 100
-			} else if curr == "GEL" {
-				total += amountCents * 30
-			} else if curr == "CNY" {
-				total += amountCents * 10
-			} else if curr == "JPY" {
-				total += amountCents / 2
-			} else if curr == "KZT" {
-				total += amountCents / 7
-			} else {
-				total += amountCents
-			}
-		}
+		total := calculateCategoryTotal(stats.Amounts)
 		categoriesWithTotal = append(categoriesWithTotal, categoryWithTotal{stats, total})
 	}
 	sort.Slice(categoriesWithTotal, func(i, j int) bool {
@@ -780,6 +720,97 @@ func getCurrencyRate(currency string) float64 {
 	return 1.0
 }
 
+// CategoryStats represents statistics for a category
+type CategoryStats struct {
+	Title   string
+	Emoji   string
+	Amounts map[string]int // currency -> amount in cents
+}
+
+// groupExpensesByCategory groups expenses by category and currency
+func groupExpensesByCategory(expenses []Expense) (map[string]*CategoryStats, map[string]int) {
+	categoryMap := make(map[string]*CategoryStats)
+	currencyFrequency := make(map[string]int)
+
+	for _, exp := range expenses {
+		var categoryKey, categoryTitle, emoji string
+
+		if exp.Category != nil {
+			categoryKey = exp.Category.Title
+			categoryTitle = exp.Category.Title
+			emoji = exp.Category.Emoji
+		} else {
+			categoryKey = "__no_category__"
+			categoryTitle = "Без категории"
+			emoji = "❓"
+		}
+
+		// Initialize category if not exists
+		if _, exists := categoryMap[categoryKey]; !exists {
+			categoryMap[categoryKey] = &CategoryStats{
+				Title:   categoryTitle,
+				Emoji:   emoji,
+				Amounts: make(map[string]int),
+			}
+		}
+
+		// Track currency frequency
+		currencyFrequency[exp.Currency]++
+
+		// Add amount to category
+		categoryMap[categoryKey].Amounts[exp.Currency] += exp.Amount
+	}
+
+	return categoryMap, currencyFrequency
+}
+
+// calculateCategoryTotal calculates total for a category using currency rates
+func calculateCategoryTotal(amounts map[string]int) int {
+	total := 0
+	for currency, amountCents := range amounts {
+		curr := strings.ToUpper(currency)
+		switch curr {
+		case "USD", "EUR", "GBP", "CHF":
+			total += amountCents * 100
+		case "GEL":
+			total += amountCents * 30
+		case "CNY":
+			total += amountCents * 10
+		case "JPY":
+			total += amountCents / 2
+		case "KZT":
+			total += amountCents / 7
+		default:
+			total += amountCents
+		}
+	}
+	return total
+}
+
+// sortCurrenciesByFrequency sorts currencies by frequency (most frequent first)
+func sortCurrenciesByFrequency(currencyFrequency map[string]int) []string {
+	type currencyWithFreq struct {
+		currency  string
+		frequency int
+	}
+
+	currenciesWithFreq := make([]currencyWithFreq, 0, len(currencyFrequency))
+	for currency, freq := range currencyFrequency {
+		currenciesWithFreq = append(currenciesWithFreq, currencyWithFreq{currency, freq})
+	}
+
+	sort.Slice(currenciesWithFreq, func(i, j int) bool {
+		return currenciesWithFreq[i].frequency > currenciesWithFreq[j].frequency
+	})
+
+	currencyOrder := make([]string, len(currenciesWithFreq))
+	for i, cf := range currenciesWithFreq {
+		currencyOrder[i] = cf.currency
+	}
+
+	return currencyOrder
+}
+
 // calculateTotalExpenses calculates total expenses grouped by currency
 func calculateTotalExpenses(expenses []Expense) map[string]int {
 	totals := make(map[string]int)
@@ -816,7 +847,7 @@ func formatTotalExpenses(totals map[string]int) string {
 		return currencies[i].currency < currencies[j].currency
 	})
 
-	var parts []string
+	parts := make([]string, 0, len(currencies))
 	for _, c := range currencies {
 		// Format amount and get currency symbol with flag
 		amountStr := formatAmount(c.amount)
