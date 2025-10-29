@@ -672,8 +672,13 @@ func (b *Bot) handleStatisticsByCategories(ctx context.Context, botAPI *bot.Bot,
 		return categoriesWithTotal[i].total > categoriesWithTotal[j].total
 	})
 
+	// Calculate and format total expenses
+	totalExpenses := calculateTotalExpenses(tgExpenses)
+	totalFormatted := formatTotalExpenses(totalExpenses)
+
 	text := "📊 <b>Статистика по категориям:</b>\n"
 	text += fmt.Sprintf("<i>%s</i>\n\n", FormatPeriod(period))
+	text += fmt.Sprintf("💰 <b>Всего:</b> %s\n\n", totalFormatted)
 
 	// Format each category (sorted by total)
 	for _, cat := range categoriesWithTotal {
@@ -694,12 +699,10 @@ func (b *Bot) handleStatisticsByCategories(ctx context.Context, botAPI *bot.Bot,
 			}
 			first = false
 
-			// Convert cents to main units
-			amount := float64(amountCents) / 100.0
-
-			// Get currency symbol
+			// Format amount and get currency symbol
+			amountStr := formatAmount(amountCents)
 			currencySymbol := getCurrencySymbol(currency)
-			text += fmt.Sprintf("%.2f%s", amount, currencySymbol)
+			text += fmt.Sprintf("%s %s", amountStr, currencySymbol)
 		}
 
 		text += "\n"
@@ -719,28 +722,109 @@ func (b *Bot) handleStatisticsByCategories(ctx context.Context, botAPI *bot.Bot,
 	})
 }
 
-// getCurrencySymbol returns the symbol for a currency code
-func getCurrencySymbol(currency string) string {
-	switch strings.ToUpper(currency) {
-	case "RUB":
-		return "₽"
-	case "USD":
-		return "$"
-	case "EUR":
-		return "€"
-	case "GEL":
-		return "₾"
-	case "GBP":
-		return "£"
-	case "JPY":
-		return "¥"
-	case "CNY":
-		return "¥"
-	case "CHF":
-		return "₣"
-	default:
-		return currency
+// formatAmount formats amount in cents, omitting .00 if cents are zero
+func formatAmount(amountCents int) string {
+	if amountCents%100 == 0 {
+		// No cents, show only whole number without decimal point
+		return fmt.Sprintf("%.0f", float64(amountCents)/100.0)
 	}
+	// Has cents, show with 2 decimal places
+	return fmt.Sprintf("%.2f", float64(amountCents)/100.0)
+}
+
+// getCurrencySymbol returns the currency code in uppercase
+func getCurrencySymbol(currency string) string {
+	return strings.ToUpper(currency)
+}
+
+// getCurrencyWithFlag returns the currency code with country flag (for total display only)
+func getCurrencyWithFlag(currency string) string {
+	flags := map[string]string{
+		"RUB": "🇷🇺",
+		"USD": "🇺🇸",
+		"EUR": "🇪🇺",
+		"GEL": "🇬🇪",
+		"GBP": "🇬🇧",
+		"JPY": "🇯🇵",
+		"CNY": "🇨🇳",
+		"CHF": "🇨🇭",
+		"KZT": "🇰🇿",
+	}
+
+	curr := strings.ToUpper(currency)
+	if flag, exists := flags[curr]; exists {
+		return curr + flag
+	}
+	return curr
+}
+
+// getCurrencyRate returns approximate rate for currency sorting (higher = more valuable)
+// This is only used for sorting order, not for converting values
+func getCurrencyRate(currency string) float64 {
+	rates := map[string]float64{
+		"USD": 100.0,
+		"EUR": 100.0,
+		"GBP": 100.0,
+		"CHF": 100.0,
+		"GEL": 30.0,
+		"CNY": 10.0,
+		"RUB": 1.0,
+		"JPY": 0.5,
+		"KZT": 0.14, // ~1/7
+	}
+
+	curr := strings.ToUpper(currency)
+	if rate, exists := rates[curr]; exists {
+		return rate
+	}
+	return 1.0
+}
+
+// calculateTotalExpenses calculates total expenses grouped by currency
+func calculateTotalExpenses(expenses []Expense) map[string]int {
+	totals := make(map[string]int)
+	for _, exp := range expenses {
+		totals[exp.Currency] += exp.Amount
+	}
+	return totals
+}
+
+// formatTotalExpenses formats total expenses with currencies sorted by rate (highest first)
+func formatTotalExpenses(totals map[string]int) string {
+	if len(totals) == 0 {
+		return ""
+	}
+
+	// Sort currencies by rate (highest first) - only for display order
+	type currencyWithRate struct {
+		currency string
+		rate     float64
+		amount   int
+	}
+
+	currencies := make([]currencyWithRate, 0, len(totals))
+	for currency, amount := range totals {
+		if amount > 0 { // Skip zero amounts
+			currencies = append(currencies, currencyWithRate{currency, getCurrencyRate(currency), amount})
+		}
+	}
+
+	sort.Slice(currencies, func(i, j int) bool {
+		if currencies[i].rate != currencies[j].rate {
+			return currencies[i].rate > currencies[j].rate
+		}
+		return currencies[i].currency < currencies[j].currency
+	})
+
+	var parts []string
+	for _, c := range currencies {
+		// Format amount and get currency symbol with flag
+		amountStr := formatAmount(c.amount)
+		symbolWithFlag := getCurrencyWithFlag(c.currency)
+		parts = append(parts, fmt.Sprintf("%s %s", amountStr, symbolWithFlag))
+	}
+
+	return strings.Join(parts, " / ")
 }
 
 // handleStatisticsByExpenses handles statistics by individual expenses with period
@@ -795,13 +879,18 @@ func (b *Bot) handleStatisticsByExpenses(ctx context.Context, botAPI *bot.Bot, c
 		return
 	}
 
+	// Calculate and format total expenses
+	totalExpenses := calculateTotalExpenses(tgExpenses)
+	totalFormatted := formatTotalExpenses(totalExpenses)
+
+	text := "📊 <b>Статистика по тратам:</b>\n"
+	text += fmt.Sprintf("<i>%s</i>\n\n", FormatPeriod(period))
+	text += fmt.Sprintf("💰 <b>Всего:</b> %s\n\n", totalFormatted)
+
 	// Sort by date (newest first)
 	sort.Slice(tgExpenses, func(i, j int) bool {
 		return tgExpenses[i].CreatedAt.After(tgExpenses[j].CreatedAt)
 	})
-
-	text := "📊 <b>Статистика по тратам:</b>\n"
-	text += fmt.Sprintf("<i>%s</i>\n\n", FormatPeriod(period))
 
 	// Format each expense
 	for _, exp := range tgExpenses {
@@ -813,7 +902,7 @@ func (b *Bot) handleStatisticsByExpenses(ctx context.Context, botAPI *bot.Bot, c
 			emoji = exp.Category.Emoji
 		}
 
-		amount := float64(exp.Amount) / 100.0
+		amountStr := formatAmount(exp.Amount)
 		currencySymbol := getCurrencySymbol(exp.Currency)
 		dateStr := FormatDate(exp.CreatedAt)
 
@@ -825,11 +914,11 @@ func (b *Bot) handleStatisticsByExpenses(ctx context.Context, botAPI *bot.Bot, c
 				runes[0] = []rune(strings.ToUpper(string(runes[0])))[0]
 				description = string(runes)
 			}
-			text += fmt.Sprintf("<b>%s</b> (%s%s): %.2f%s (%s)\n",
-				description, emoji, categoryName, amount, currencySymbol, dateStr)
+			text += fmt.Sprintf("<b>%s</b> (%s%s): %s %s (%s)\n",
+				description, emoji, categoryName, amountStr, currencySymbol, dateStr)
 		} else {
-			text += fmt.Sprintf("<b>%s%s</b>: %.2f%s (%s)\n",
-				emoji, categoryName, amount, currencySymbol, dateStr)
+			text += fmt.Sprintf("<b>%s%s</b>: %s %s (%s)\n",
+				emoji, categoryName, amountStr, currencySymbol, dateStr)
 		}
 	}
 
