@@ -59,22 +59,6 @@ var (
 		},
 	)
 
-	// Счетчик LLM парсингов
-	llmParsesTotal = promauto.NewCounter(
-		prometheus.CounterOpts{
-			Name: "telegram_llm_parses_total",
-			Help: "Total number of LLM expense parses",
-		},
-	)
-
-	// Счетчик транскрибций
-	transcriptionsTotal = promauto.NewCounter(
-		prometheus.CounterOpts{
-			Name: "telegram_transcriptions_total",
-			Help: "Total number of voice transcriptions",
-		},
-	)
-
 	// Счетчик ошибок по типам
 	errorsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{

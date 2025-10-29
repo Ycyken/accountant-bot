@@ -100,28 +100,58 @@ func (b *Bot) Stop(ctx context.Context) {
 	b.logger.Print(ctx, "stopping telegram bot")
 }
 
-// initializeMetrics initializes Prometheus metrics from Prometheus
+// initializeMetrics initializes Prometheus metrics from Prometheus and database
 // This ensures metrics persist across bot restarts
 func (b *Bot) initializeMetrics(ctx context.Context) {
-	// Try to restore metrics from Prometheus
+	// First, initialize expenses and categories from database (most reliable)
+	if err := b.initMetricsFromDatabase(ctx); err != nil {
+		b.logger.Error(ctx, "failed to initialize metrics from database", "err", err)
+	}
+
+	// Then, try to restore other metrics from Prometheus
 	if b.prometheusClient != nil {
-		if err := b.restoreMetricsFromPrometheus(ctx); err != nil {
-			b.logger.Error(ctx, "failed to restore metrics from prometheus, will retry periodically", "err", err)
+		if err := b.initMetricsFromPrometheus(ctx); err != nil {
+			b.logger.Error(ctx, "failed to initialize metrics from prometheus, will retry periodically", "err", err)
 			// Start periodic retry in background
-			go b.retryMetricRestoration(context.Background())
+			go b.retryMetricInitialization(context.Background())
 			return
 		}
-		b.logger.Print(ctx, "metrics successfully restored from prometheus")
+		b.logger.Print(ctx, "metrics successfully initialized from prometheus")
 		return
 	}
 
 	// Prometheus client not available, start retry in background
 	b.logger.Error(ctx, "prometheus client not available, will retry initialization")
-	go b.retryMetricRestoration(context.Background())
+	go b.retryMetricInitialization(context.Background())
 }
 
-// restoreMetricsFromPrometheus restores all counter metrics from Prometheus
-func (b *Bot) restoreMetricsFromPrometheus(ctx context.Context) error {
+// initMetricsFromDatabase initializes expenses and categories counters from database
+func (b *Bot) initMetricsFromDatabase(ctx context.Context) error {
+	// Get total expenses count from DB
+	expenses, err := b.saldo.GetAllExpenses(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get expenses count: %w", err)
+	}
+
+	// Get total categories count from DB
+	categories, err := b.saldo.GetAllCategories(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get categories count: %w", err)
+	}
+
+	// Initialize counters with database values
+	expensesCreated.Add(float64(len(expenses)))
+	categoriesCreated.Add(float64(len(categories)))
+
+	b.logger.Print(ctx, "metrics initialized from database",
+		"expenses", len(expenses),
+		"categories", len(categories))
+
+	return nil
+}
+
+// initMetricsFromPrometheus initializes all counter metrics from Prometheus
+func (b *Bot) initMetricsFromPrometheus(ctx context.Context) error {
 	if b.prometheusClient == nil {
 		return errors.New("prometheus client not initialized")
 	}
@@ -158,27 +188,18 @@ func (b *Bot) restoreMetricsFromPrometheus(ctx context.Context) error {
 		errorsTotal.WithLabelValues(errType).Add(count)
 	}
 
-	expensesCreated.Add(snapshot.ExpensesCreated)
-	categoriesCreated.Add(snapshot.CategoriesCreated)
-	llmParsesTotal.Add(snapshot.LLMParsesTotal)
-	transcriptionsTotal.Add(snapshot.TranscriptionsTotal)
-
 	b.logger.Print(ctx, "metrics restored from prometheus",
 		"commands", len(snapshot.CommandsProcessed),
 		"messages", len(snapshot.MessagesProcessed),
 		"buttons", len(snapshot.ButtonsPressed),
 		"callbacks", len(snapshot.CallbacksProcessed),
-		"errors", len(snapshot.ErrorsTotal),
-		"expenses", snapshot.ExpensesCreated,
-		"categories", snapshot.CategoriesCreated,
-		"llm_parses", snapshot.LLMParsesTotal,
-		"transcriptions", snapshot.TranscriptionsTotal)
+		"errors", len(snapshot.ErrorsTotal))
 
 	return nil
 }
 
-// retryMetricRestoration periodically retries metric restoration until success
-func (b *Bot) retryMetricRestoration(ctx context.Context) {
+// retryMetricInitialization periodically retries metric initialization until success
+func (b *Bot) retryMetricInitialization(ctx context.Context) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
@@ -189,7 +210,7 @@ func (b *Bot) retryMetricRestoration(ctx context.Context) {
 		select {
 		case <-ticker.C:
 			retryCount++
-			b.logger.Print(ctx, "retrying metric restoration from prometheus", "attempt", retryCount)
+			b.logger.Print(ctx, "retrying metric initialization from prometheus", "attempt", retryCount)
 
 			// Try to create client if it doesn't exist
 			if b.prometheusClient == nil {
@@ -198,7 +219,7 @@ func (b *Bot) retryMetricRestoration(ctx context.Context) {
 				if err != nil {
 					b.logger.Error(ctx, "failed to create prometheus client", "err", err)
 					if retryCount >= maxRetries {
-						b.logger.Error(ctx, "max retries reached, giving up on metric restoration")
+						b.logger.Error(ctx, "max retries reached, giving up on metric initialization")
 						return
 					}
 					continue
@@ -206,22 +227,22 @@ func (b *Bot) retryMetricRestoration(ctx context.Context) {
 				b.prometheusClient = client
 			}
 
-			// Try to restore metrics
-			if err := b.restoreMetricsFromPrometheus(ctx); err != nil {
-				b.logger.Error(ctx, "failed to restore metrics", "err", err, "attempt", retryCount)
+			// Try to initialize metrics
+			if err := b.initMetricsFromPrometheus(ctx); err != nil {
+				b.logger.Error(ctx, "failed to initialize metrics", "err", err, "attempt", retryCount)
 				if retryCount >= maxRetries {
-					b.logger.Error(ctx, "max retries reached, giving up on metric restoration")
+					b.logger.Error(ctx, "max retries reached, giving up on metric initialization")
 					return
 				}
 				continue
 			}
 
 			// Success!
-			b.logger.Print(ctx, "metrics successfully restored from prometheus after retries", "attempts", retryCount)
+			b.logger.Print(ctx, "metrics successfully initialized from prometheus after retries", "attempts", retryCount)
 			return
 
 		case <-ctx.Done():
-			b.logger.Print(ctx, "metric restoration retry cancelled")
+			b.logger.Print(ctx, "metric initialization retry cancelled")
 			return
 		}
 	}

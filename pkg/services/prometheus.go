@@ -13,15 +13,11 @@ import (
 
 // MetricsSnapshot contains restored metric values
 type MetricsSnapshot struct {
-	CommandsProcessed   map[string]float64 // command -> count
-	MessagesProcessed   map[string]float64 // type -> count
-	ButtonsPressed      map[string]float64 // button -> count
-	CallbacksProcessed  map[string]float64 // action -> count
-	ExpensesCreated     float64
-	CategoriesCreated   float64
-	LLMParsesTotal      float64
-	TranscriptionsTotal float64
-	ErrorsTotal         map[string]float64 // type -> count
+	CommandsProcessed  map[string]float64 // command -> count
+	MessagesProcessed  map[string]float64 // type -> count
+	ButtonsPressed     map[string]float64 // button -> count
+	CallbacksProcessed map[string]float64 // action -> count
+	ErrorsTotal        map[string]float64 // type -> count
 }
 
 // PrometheusClient wraps Prometheus API client
@@ -66,17 +62,13 @@ func (p *PrometheusClient) RestoreMetrics(ctx context.Context) (*MetricsSnapshot
 		ErrorsTotal:        make(map[string]float64),
 	}
 
-	// Query all counter metrics
+	// Query all counter metrics (except expenses/categories which are restored from database)
 	queries := map[string]string{
-		"commands":       "telegram_commands_processed_total",
-		"messages":       "telegram_messages_processed_total",
-		"buttons":        "telegram_buttons_pressed_total",
-		"callbacks":      "telegram_callbacks_processed_total",
-		"expenses":       "telegram_expenses_created_total",
-		"categories":     "telegram_categories_created_total",
-		"llm_parses":     "telegram_llm_parses_total",
-		"transcriptions": "telegram_transcriptions_total",
-		"errors":         "telegram_errors_total",
+		"commands":  "telegram_commands_processed_total",
+		"messages":  "telegram_messages_processed_total",
+		"buttons":   "telegram_buttons_pressed_total",
+		"callbacks": "telegram_callbacks_processed_total",
+		"errors":    "telegram_errors_total",
 	}
 
 	for name, query := range queries {
@@ -88,6 +80,9 @@ func (p *PrometheusClient) RestoreMetrics(ctx context.Context) (*MetricsSnapshot
 		if len(warnings) > 0 {
 			p.logger.Print(ctx, "prometheus query warnings", "metric", name, "warnings", warnings)
 		}
+
+		// Debug logging
+		p.logger.Print(ctx, "prometheus query result", "metric", name, "type", fmt.Sprintf("%T", result), "value", result)
 
 		// Parse result based on metric type
 		switch name {
@@ -101,14 +96,6 @@ func (p *PrometheusClient) RestoreMetrics(ctx context.Context) (*MetricsSnapshot
 			snapshot.CallbacksProcessed = p.parseVectorWithLabels(result, "action")
 		case "errors":
 			snapshot.ErrorsTotal = p.parseVectorWithLabels(result, "type")
-		case "expenses":
-			snapshot.ExpensesCreated = p.parseScalar(result)
-		case "categories":
-			snapshot.CategoriesCreated = p.parseScalar(result)
-		case "llm_parses":
-			snapshot.LLMParsesTotal = p.parseScalar(result)
-		case "transcriptions":
-			snapshot.TranscriptionsTotal = p.parseScalar(result)
 		}
 	}
 
@@ -134,28 +121,6 @@ func (p *PrometheusClient) parseVectorWithLabels(value model.Value, labelName st
 	}
 
 	return result
-}
-
-// parseScalar extracts single value from result
-func (p *PrometheusClient) parseScalar(value model.Value) float64 {
-	if value == nil {
-		return 0
-	}
-
-	// Try vector first (single sample)
-	if vector, ok := value.(model.Vector); ok {
-		if len(vector) > 0 {
-			return float64(vector[0].Value)
-		}
-		return 0
-	}
-
-	// Try scalar
-	if scalar, ok := value.(*model.Scalar); ok {
-		return float64(scalar.Value)
-	}
-
-	return 0
 }
 
 // CheckHealth verifies Prometheus is accessible
