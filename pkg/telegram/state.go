@@ -31,7 +31,7 @@ type UserStateData struct {
 
 // ExpenseData holds parsed expense information
 type ExpenseData struct {
-	Amount      int // in cents
+	Amount      int64 // in cents
 	Currency    string
 	Category    string
 	Description string

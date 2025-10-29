@@ -286,7 +286,7 @@ func (b *Bot) showExpenseConfirmation(ctx context.Context, botAPI *bot.Bot, chat
 
 	for i, exp := range expenses {
 		stateData.ExpensesData[i] = ExpenseData{
-			Amount:      int(exp.Amount * 100),
+			Amount:      int64(exp.Amount * 100),
 			Currency:    exp.Currency,
 			Category:    exp.Category,
 			Description: exp.Description,
@@ -596,7 +596,7 @@ func (b *Bot) handleStatisticsByCategories(ctx context.Context, botAPI *bot.Bot,
 	// Sort categories by total amount (with currency rate approximation)
 	type categoryWithTotal struct {
 		stats *CategoryStats
-		total int
+		total int64
 	}
 	categoriesWithTotal := make([]categoryWithTotal, 0, len(categoryMap))
 	for _, stats := range categoryMap {
@@ -652,7 +652,7 @@ func (b *Bot) handleStatisticsByCategories(ctx context.Context, botAPI *bot.Bot,
 }
 
 // formatAmount formats amount in cents, omitting .00 if cents are zero
-func formatAmount(amountCents int) string {
+func formatAmount(amountCents int64) string {
 	if amountCents%100 == 0 {
 		// No cents, show only whole number without decimal point
 		return fmt.Sprintf("%.0f", float64(amountCents)/100.0)
@@ -713,7 +713,7 @@ func getCurrencyRate(currency string) float64 {
 type CategoryStats struct {
 	Title   string
 	Emoji   string
-	Amounts map[string]int // currency -> amount in cents
+	Amounts map[string]int64 // currency -> amount in cents
 }
 
 // groupExpensesByCategory groups expenses by category and currency
@@ -739,7 +739,7 @@ func groupExpensesByCategory(expenses []Expense) (map[string]*CategoryStats, map
 			categoryMap[categoryKey] = &CategoryStats{
 				Title:   categoryTitle,
 				Emoji:   emoji,
-				Amounts: make(map[string]int),
+				Amounts: make(map[string]int64),
 			}
 		}
 
@@ -754,11 +754,11 @@ func groupExpensesByCategory(expenses []Expense) (map[string]*CategoryStats, map
 }
 
 // calculateCategoryTotal calculates total for a category using currency rates
-func calculateCategoryTotal(amounts map[string]int) int {
-	total := 0
+func calculateCategoryTotal(amounts map[string]int64) int64 {
+	total := int64(0)
 	for currency, amountCents := range amounts {
 		rate := getCurrencyRate(currency)
-		total += int(float64(amountCents) * rate)
+		total += int64(float64(amountCents) * rate)
 	}
 	return total
 }
@@ -788,8 +788,8 @@ func sortCurrenciesByFrequency(currencyFrequency map[string]int) []string {
 }
 
 // calculateTotalExpenses calculates total expenses grouped by currency
-func calculateTotalExpenses(expenses []Expense) map[string]int {
-	totals := make(map[string]int)
+func calculateTotalExpenses(expenses []Expense) map[string]int64 {
+	totals := make(map[string]int64)
 	for _, exp := range expenses {
 		totals[exp.Currency] += exp.Amount
 	}
@@ -797,7 +797,7 @@ func calculateTotalExpenses(expenses []Expense) map[string]int {
 }
 
 // formatTotalExpenses formats total expenses with currencies sorted by rate (highest first)
-func formatTotalExpenses(totals map[string]int) string {
+func formatTotalExpenses(totals map[string]int64) string {
 	if len(totals) == 0 {
 		return ""
 	}
@@ -806,7 +806,7 @@ func formatTotalExpenses(totals map[string]int) string {
 	type currencyWithRate struct {
 		currency string
 		rate     float64
-		amount   int
+		amount   int64
 	}
 
 	currencies := make([]currencyWithRate, 0, len(totals))

@@ -36,7 +36,7 @@ CREATE TABLE "expenses" (
 	"expenseId" int4 NOT NULL GENERATED ALWAYS AS IDENTITY,
 	"userId" int4 NOT NULL,
 	"categoryId" int4,
-	"amount" int4 NOT NULL,
+	"amount" int8 NOT NULL,
 	"description" text NOT NULL,
 	"createdAt" timestamp with time zone NOT NULL DEFAULT NOW(),
 	"updatedAt" timestamp with time zone NOT NULL DEFAULT NOW(),

@@ -142,7 +142,7 @@ type Expense struct {
 	ID          int       `pg:"expenseId,pk"`
 	UserID      int       `pg:"userId,use_zero"`
 	CategoryID  *int      `pg:"categoryId"`
-	Amount      int       `pg:"amount,use_zero"`
+	Amount      int64     `pg:"amount,use_zero"`
 	Description string    `pg:"description,use_zero"`
 	CreatedAt   time.Time `pg:"createdAt,use_zero"`
 	UpdatedAt   time.Time `pg:"updatedAt,use_zero"`

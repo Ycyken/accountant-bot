@@ -141,7 +141,7 @@ func (s *Manager) FindOrCreateCategoryByTitle(ctx context.Context, userID int, t
 // Expense methods
 
 // CreateExpense creates a new expense
-func (s *Manager) CreateExpense(ctx context.Context, userID int, categoryID *int, amount int, currency, description string) (*Expense, error) {
+func (s *Manager) CreateExpense(ctx context.Context, userID int, categoryID *int, amount int64, currency, description string) (*Expense, error) {
 	expense := &db.Expense{
 		UserID:      userID,
 		CategoryID:  categoryID,
@@ -167,7 +167,7 @@ func (s *Manager) CreateExpense(ctx context.Context, userID int, categoryID *int
 }
 
 // CreateExpenseWithCategory creates expense and finds/creates category if needed
-func (s *Manager) CreateExpenseWithCategory(ctx context.Context, userID int, amount int, currency, categoryTitle, description string) (*Expense, error) {
+func (s *Manager) CreateExpenseWithCategory(ctx context.Context, userID int, amount int64, currency, categoryTitle, description string) (*Expense, error) {
 	var categoryID *int
 
 	if categoryTitle != "" {

@@ -23,7 +23,7 @@ type Expense struct {
 	ID          int
 	UserID      int
 	CategoryID  *int
-	Amount      int // in cents
+	Amount      int64 // in cents
 	Currency    string
 	Description string
 	CreatedAt   time.Time
@@ -42,7 +42,7 @@ type CreateCategoryRequest struct {
 // CreateExpenseRequest represents a request to create an expense
 type CreateExpenseRequest struct {
 	UserID         int
-	Amount         int // in cents
+	Amount         int64 // in cents
 	Currency       string
 	CategoryTitle  string
 	Description    string
